@@ -1,22 +1,22 @@
 ---
-title: "02-tara-ocean-interactions"
+title: "Tara ocean: sparse quadratic log-contrast modeling"
 date: "Compiled at `r format(Sys.time(), '%Y-%m-%d %H:%M:%S', tz = 'UTC')` UTC"
 output: github_document
 params:
   name: "02-tara-ocean-interactions" # change if you rename file
 ---
 
-```{r here, message=FALSE}
+```{r here, message=FALSE, echo = F}
 here::i_am(paste0(params$name, ".Rmd"), uuid = "f3ca71d3-1f1c-4612-8aec-d6c86500f6c6")
+knitr::opts_chunk$set(dpi = 200, echo = T, warning = F, message = F)
 ```
 
-The purpose of this document is ...
 
-```{r packages}
+```{r packages, echo = F}
 library("conflicted")
 ```
 
-```{r directories}
+```{r directories, echo = F}
 # create or *empty* the target directory, used to write this file's data: 
 projthis::proj_create_dir_target(params$name, clean = TRUE)
 
@@ -27,9 +27,400 @@ path_target <- projthis::proj_path_target(params$name)
 path_source <- projthis::proj_path_source(params$name)
 ```
 
-## Tasks
 
-The first task is ...
+# Load Tara Ocean data
+
+
+This dataset was processed and aggregated in https://github.com/jacobbien/trac-reproducible.
+
+```{r}
+path.data <- "data/"
+source("R/sparse_log_contrast.R")
+source("R/slc_int.R")
+source("R/slc_int_plots.R")
+source("R/log-ratio-lasso_interactions.R")
+source("R/utils.R")
+```
+
+
+```{r}
+library(Matrix)
+library(tidyverse)
+#devtools::install_github("viettr/trac", dependencies = TRUE, ref = "prediction_during_cv")
+library(trac)
+library(reticulate)
+library(ggplot2)
+library(gridExtra)
+library(ggpattern)
+library(ggrepel)
+```
+
+```{r}
+dat_list <- readRDS(paste0(path.data, "tara_sal_processed_aggregated.RDS"))
+```
+
+
+
+# 1. SLC and SLC + int.
+
+
+## Analysis on family level
+
+30 most abundant families
+
+
+```{r extract-family}
+## extract family level
+i = "Family"
+dat_family <- dat_list[[i]]
+X_family <- dat_family$x 
+y_sal <- dat_family$y
+dim(X_family)
+```
+
+
+```{r}
+## keep 30 most abundant families
+abund <- colSums(X_family > 0)
+X_family <- X_family[, order(abund, decreasing = T)[1:30]]
+dim(X_family)
+```
+
+```{r rename-family}
+rename_X <- stringr::str_split(colnames(X_family), "::")
+rename_X <- sapply(rename_X,tail,1)
+colnames(X_family) <- rename_X
+```
+
+### Make sure that names have no blanks or "-"
+
+```{r rename2-family}
+colnames(X_family) <- gsub(" ", "", colnames(X_family))
+colnames(X_family) <- gsub("_", "", colnames(X_family))
+colnames(X_family) <- gsub("-", "", colnames(X_family))
+```
+
+
+```{r transform-data-family}
+pseudo_count <- 1
+X_family_psd <- as.matrix(X_family + pseudo_count)
+X_family_rel <- X_family_psd/rowSums(X_family_psd)
+```
+
+
+
+### Fit SLC and SLC + int model
+
+```{r eval = T, results='hide'}
+slc_slc_int_family <- slc_slc_int_all_splits(X = as.matrix(X_family_rel),
+                                             y = y_sal,
+                                             method = "regr", output = "raw")
+```
+
+
+
+### Compare test and train error
+
+
+```{r, echo = F}
+nsplit = 10
+train_mse_slc <- c()
+test_mse_slc <- c()
+
+train_mse_slc_int <- c()
+test_mse_slc_int <- c()
+
+r_squared_train_slc <- c()
+r_squared_test_slc <- c()
+
+r_squared_train_slc_int <- c()
+r_squared_test_slc_int <- c()
+
+
+n <- length(y_sal) - length(slc_slc_int_family$tr[[1]])
+p <- ncol(X_family_rel)
+ntot <- length(y_sal)
+y <- y_sal
+
+for(r in seq(nsplit)){
+  yhat_trbest <- slc_slc_int_family$yhat_tr[[r]][, slc_slc_int_family$cvfit[[r]]$cv$i1se]
+  yhat_tebest <- slc_slc_int_family$yhat_te[[r]][, slc_slc_int_family$cvfit[[r]]$cv$i1se]
+  
+  yhat_tr_intbest <- slc_slc_int_family$yhat_tr_int[[r]][, slc_slc_int_family$cvfit[[r]]$cv$i1se]
+  yhat_te_intbest <- slc_slc_int_family$yhat_te_int[[r]][, slc_slc_int_family$cvfit[[r]]$cv$i1se]
+  
+  ytr <- y[slc_slc_int_family$tr[[r]]]
+  yte <- y[-slc_slc_int_family$tr[[r]]]
+  
+  train_mse_slc[r] <- (mean((yhat_trbest - ytr)^2))
+  test_mse_slc[r] <- (mean((yhat_tebest - yte)^2))
+  
+  train_mse_slc_int[r] <- (mean((yhat_tr_intbest - ytr)^2))
+  test_mse_slc_int[r] <- (mean((yhat_te_intbest - yte)^2))
+  
+  
+  
+  observed_values <- ytr
+  predicted_values <- yhat_trbest
+  
+  # Calculate mean of observed values
+  mean_observed <- mean(observed_values)
+  
+  # Calculate R-squared
+  ss_residual <- sum((observed_values - predicted_values)^2)
+  ss_total <- sum((observed_values - mean_observed)^2)
+  r_squared <- 1 - (ss_residual / ss_total)
+  n <- length(ytr)
+  r_squared_train_slc[r] <- r_squared
+  
+  
+  observed_values <- yte
+  predicted_values <- yhat_tebest
+  
+  # Calculate mean of observed values
+  mean_observed <- mean(observed_values)
+  
+  # Calculate R-squared
+  ss_residual <- sum((observed_values - predicted_values)^2)
+  ss_total <- sum((observed_values - mean_observed)^2)
+  r_squared <- 1 - (ss_residual / ss_total)
+  n <- length(yte)
+  r_squared_test_slc[r] <- r_squared
+  
+  
+  observed_values <- ytr
+  predicted_values <- yhat_tr_intbest
+  
+  # Calculate mean of observed values
+  mean_observed <- mean(observed_values)
+  
+  # Calculate R-squared
+  ss_residual <- sum((observed_values - predicted_values)^2)
+  ss_total <- sum((observed_values - mean_observed)^2)
+  r_squared <- 1 - (ss_residual / ss_total)
+  n <- length(ytr)
+  r_squared_train_slc_int[r] <- r_squared
+  
+  observed_values <- yte
+  predicted_values <- yhat_te_intbest
+  
+  # Calculate mean of observed values
+  mean_observed <- mean(observed_values)
+  
+  # Calculate R-squared
+  ss_residual <- sum((observed_values - predicted_values)^2)
+  ss_total <- sum((observed_values - mean_observed)^2)
+  r_squared <- 1 - (ss_residual / ss_total)
+  n <- length(yte)
+  r_squared_test_slc_int[r] <- r_squared
+}
+
+# Combine the data into a single data frame
+df <- data.frame(
+  mse = c(train_mse_slc, test_mse_slc, train_mse_slc_int, test_mse_slc_int),
+  group = rep(c("slc train", "slc test", "slc + int train", "slc + int test"), each = length(train_mse_slc))
+)
+
+# Add information about the underlying sample size to the group names
+df$group <- factor(df$group, labels = c(
+  paste0("slc train (n=", n, ")"),
+  paste0("slc test (n=", ntot - n, ")"),
+  paste0("slc + int train (n=", n, ")"),
+  paste0("slc + int test (n=", ntot - n, ")")
+))
+
+
+
+df <- data.frame(
+  r_squared = c(r_squared_train_slc, r_squared_test_slc,
+                r_squared_train_slc_int, r_squared_test_slc_int),
+  
+  group = rep(c("slc train", "slc test", "slc + int train", "slc + int test"), 
+              each = nsplit),
+  model = rep(c("Main effects model (sparse lc)", "Interaction model (sparse qlc)"), 
+              each = nsplit * 2),
+  traintest = rep(c("train", "test", "train", "test"), each = nsplit))
+
+
+# Add information about the underlying sample size to the group names
+df$group <- factor(df$group, levels =c("slc train", "slc test", 
+                                       "slc + int train", "slc + int test") )
+df$model <- factor(df$model, levels =c("Main effects model (sparse lc)", 
+                                       "Interaction model (sparse qlc)") )
+df$traintest <- factor(df$traintest, levels = c("train", "test"))
+
+
+
+
+# Create the boxplot
+plt <- ggplot(df, aes(x = group, y = r_squared, fill = model, pattern = traintest)) +
+  geom_boxplot() +
+  scale_fill_manual(values = c("lightblue3","steelblue")) +
+  geom_boxplot_pattern(position = position_dodge(preserve = "single"), 
+                       color = "black", pattern_fill = "white",
+                       pattern_angle = 45, pattern_density = 0.1, pattern_spacing = 0.025, 
+                       pattern_key_scale_factor = 0.6) +
+  scale_pattern_manual(values = c(test = "stripe", train  = "none")) +
+  labs(x = "", y = expression("R"^2)) +
+  theme_minimal() +
+  theme(axis.text.x = element_blank(),
+        axis.ticks = element_blank()) +
+  guides(
+    fill = guide_legend(override.aes = list(pattern = "none"), title = "Model"),
+    pattern = guide_legend(override.aes = list(fill = "white"), title = "Train or test data"))
+
+print(plt)
+```
+
+
+
+
+```{r}
+sum_mat <- rbind(c(mean(train_mse_slc), sd(train_mse_slc)),
+                 c(mean(test_mse_slc), sd(test_mse_slc)),
+                 c(mean(train_mse_slc_int), sd(train_mse_slc_int)),
+                 c(mean(test_mse_slc_int), sd(test_mse_slc_int)))
+colnames(sum_mat) <- c("mean MSE", "sd MSE")
+sum_mat <- as.data.frame(sum_mat)
+sum_mat$model <- c("main-train", "main-test", "int-train", "int-test")
+sum_mat$rank <- i
+
+
+```
+
+
+
+
+
+```{r}
+plt <- list()
+for(r in 1:10){
+  
+  yhat_tebest <- slc_slc_int_family$yhat_te[[r]][, slc_slc_int_family$cvfit[[r]]$cv$i1se]
+  yhat_te_intbest <- slc_slc_int_family$yhat_te_int[[r]][, slc_slc_int_family$cvfit[[r]]$cv$i1se]
+  
+  
+  # Create a data frame with the relevant variables
+  data <- data.frame(
+    yhat_tebest = yhat_tebest,
+    yhat_te_intbest = yhat_te_intbest,
+    y = y[-slc_slc_int_family$tr[[r]]]  
+  )
+  
+  # Create a scatter plot using ggplot2
+  plt[[r]] <- ggplot(data, aes(x = yhat_tebest, y = y)) +
+    
+    geom_point(data = data, aes(x = yhat_te_intbest, y = y, color = "Interaction model (SLC + int.)"), alpha = 0.8, size = 3) +
+    geom_point(aes(color = "Main effects model (SLC)"), alpha = 0.8, size = 3) +
+    geom_abline(intercept = 0, slope = 1, linetype = "dashed", color = "black") +
+    labs(title = paste("Train-test split", r),
+         x = expression(hat(y)~"(test)"), y = "y (test)") +
+    theme_minimal() +
+    scale_color_manual(
+      values = c("Main effects model (SLC)" = "lightblue3",
+                 "Interaction model (SLC + int.)" = "steelblue"),
+      name = "Model",
+      limits = c("Main effects model (SLC)", "Interaction model (SLC + int.)")
+    ) +
+    theme(legend.position = "top", legend.justification = "center")
+  
+  
+  
+  
+} 
+
+plt[[2]]
+```
+
+
+
+### Plot coefficients
+
+only show coefficients with a nonzero mean estimate.
+
+
+
+
+
+Main + interaction effects (SLC + int.)
+
+
+```{r, echo = F}
+# Define a vector of names to be replaced and their corresponding replacements
+names_to_replace <- c("Surface1", "f2", "f7", "f8", "f13", "f15", "Surface2", 
+                      "Surface4", "ChesapeakeDelawareBay", "f26", "f39", "f40", 
+                      "f55", "f60", "Deep1", "f96", "f98", "S25593", "JLETNPY6", "ZD0405")
+replacements <- c("Surface1 (Order: SAR11 clade)", "f2 (Order: SAR11 clade)", 
+                  "f7 (Order: SAR11 clade)", "f8 (Order: SAR11 clade)", 
+                  "f13 (Order: SAR11 clade)", "f15 (Order: SAR11 clade)", 
+                  "Surface2 (Order: SAR11 clade)", "Surface4 (Order: SAR11 clade)", 
+                  "ChesapeakeDelawareBay (Order: SAR11 clade)", "f26 (Order: SAR11 clade)", 
+                  "f39 (Order: SAR11 clade)", "f40 (Order: SAR11 clade)", 
+                  "f55 (Order: SAR11 clade)", "f60 (Order: SAR11 clade)", 
+                  "Deep1 (Order: SAR11 clade)", "f96 (Order: SAR11 clade)", 
+                  "f98 (Order: SAR11 clade)", "S25593 (Order: Rickettsiales)", 
+                  "JLETNPY6 (Order: Oceanospirillales)", "ZD0405 (Order: Oceanospirillales)")
+
+X_family1 <- X_family
+# Iterate over each name to be replaced and perform the replacement
+for (i in seq_along(names_to_replace)) {
+  colnames(X_family1)[colnames(X_family1) == names_to_replace[i]] <- replacements[i]
+}
+XX_family1 <- compute.interactions.aitchison(X_family1)
+new_name_fam <- c(colnames(X_family1), colnames(XX_family1))
+new_name_fam <- gsub("\\(Order:", " (Order:", new_name_fam)
+```
+
+
+```{r echo = F}
+mean_ <- apply(slc_slc_int_family$beta_int_est_refit, 1, mean)
+
+# Extract the relevant data
+data_to_plot <- t(slc_slc_int_family$beta_int_est_refit)
+colnames(data_to_plot) <- new_name_fam
+data_to_plot <- data_to_plot[, mean_ != 0]
+
+# Get the order of means
+mean_order <- colnames(data_to_plot)[order(apply(data_to_plot, 2, mean))]
+
+# Convert data to long format for ggplot
+data_long <- data.frame(value = c(data_to_plot), group = rep(mean_order, each = nrow(data_to_plot)))
+# Add a variable indicating whether it's an interaction or linear effect
+data_long$effect_type <- ifelse(grepl(":", data_long$group), "Interaction", "Linear")
+median_values <- aggregate(value ~ group, data_long, median)
+data_long <- merge(data_long, median_values, by = "group", suffixes = c("", "_median"))
+
+# Create ggplot boxplot with different outline colors for interaction and linear effects
+
+coef_int <- ggplot(data_long, aes(x = value, y = factor(group, levels = colnames(data_to_plot)), fill = effect_type)) +
+  geom_vline(xintercept = 0, color = "darkgrey") +
+  geom_boxplot(position = position_dodge(width = 1), color = "black", fill = "steelblue", width = 0.6) +
+  scale_color_manual(values = c("Linear" = "lightblue3", "Interaction" = "steelblue")) +
+  labs(y = "", x = expression("Estimated coefficients")) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(size = 14, colour = "black"),
+        axis.text.y = element_text(
+          angle = 0,
+          hjust = 1,
+          size = 12,
+          colour = "black",
+          face = ifelse(colnames(data_to_plot) %in% median_values$group[median_values$value != 0], "bold", "plain")
+        ) 
+  ) + scale_y_discrete(position = "right")
+
+
+
+```
+
+```{r}
+median_values$group[median_values$value != 0]
+```
+
+
+
+
+
+
 
 ## Files written
 
