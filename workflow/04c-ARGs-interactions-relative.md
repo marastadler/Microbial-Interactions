@@ -1,20 +1,10 @@
----
-title: "04c-ARGs-interactions-relative"
-date: "Compiled at `r format(Sys.time(), '%Y-%m-%d %H:%M:%S', tz = 'UTC')` UTC"
-output: github_document
-params:
-  name: "04c-ARGs-interactions-relative" # change if you rename file
----
-
-```{r here, message=FALSE, echo = F}
-here::i_am(paste0(params$name, ".Rmd"), uuid = "56797c4b-eb48-4d32-bf93-a767bb32d50b")
-knitr::opts_chunk$set(dpi = 200, echo = T, warning = F, message = F)
-```
-
+04c-ARGs-interactions-relative
+================
+Compiled at 2024-04-27 14:10:41 UTC
 
 Here we treat the counts as relative abundances.
 
-```{r packages}
+``` r
 library("conflicted")
 library(dplyr)
 library(tidyr)
@@ -25,27 +15,15 @@ library(trac)
 library(gridExtra)
 ```
 
-```{r directories, echo = F}
-# create or *empty* the target directory, used to write this file's data: 
-projthis::proj_create_dir_target(params$name, clean = TRUE)
-
-# function to get path to target directory: path_target("sample.csv")
-path_target <- projthis::proj_path_target(params$name)
-
-# function to get path to previous data: path_source("00-import", "sample.csv")
-path_source <- projthis::proj_path_source(params$name)
-```
-
 ### Read data
 
-```{r}
+``` r
 path_data <- "data/"
 mOTU_all <- readRDS(paste0(path_data, "mOTU_all.rds"))
 meta_all <- readRDS(paste0(path_data, "Metadata_all.rds"))
 ```
 
-
-```{r}
+``` r
 ## extract genus level and adjust names
 mOTU_genus <- mOTU_all$Genus
 rownames(mOTU_genus) <- substr(rownames(mOTU_genus), 4, nchar(rownames(mOTU_genus)))
@@ -53,18 +31,30 @@ rownames(mOTU_genus) <- substr(rownames(mOTU_genus), 4, nchar(rownames(mOTU_genu
 mOTU_genus[1:5, 1:5]
 ```
 
+    ##            _Bacteroides_ _Cellvibrio_ _Clostridium_ _Eubacterium_
+    ## x10MCx1134             0            0       3687231             0
+    ## x10MCx1135             0            0       5313951             0
+    ## x10MCx1138             0            0             0             0
+    ## x10MCx1140             0            0      21581161             0
+    ## x10MCx1143             0            0             0             0
+    ##            _Ruminococcus_
+    ## x10MCx1134     3158547431
+    ## x10MCx1135      336839421
+    ## x10MCx1138      208437127
+    ## x10MCx1140      682029749
+    ## x10MCx1143      413187394
 
-1. Remove samples with missing data in the metadata
+1.  Remove samples with missing data in the metadata
 
-
-```{r}
+``` r
 dim(meta_all)
-
 ```
+
+    ## [1] 2173  243
 
 Read ARG data and add it to meta data
 
-```{r}
+``` r
 arg_df <- read.table(paste0(path_data, "hub.microbiome.summary.down.10000000.r"), sep='\t')
 arg_df <- arg_df %>% 
   pivot_wider(id_cols = "SampleID", names_from="Feature", values_from = "FeatureValue") %>% 
@@ -73,7 +63,17 @@ arg_df <- arg_df %>%
 head(arg_df)
 ```
 
-```{r}
+    ## # A tibble: 6 × 2
+    ##   SampleID   CARD10M
+    ##   <chr>        <dbl>
+    ## 1 x20MCx2508  118088
+    ## 2 x10MCx3076  106544
+    ## 3 x30MCx2303  118960
+    ## 4 x30MCx2933  133495
+    ## 5 x20MCx2635  115226
+    ## 6 x30MCx3237  125620
+
+``` r
 meta_arg <- meta_all %>% 
   tibble::rownames_to_column("SampleID") %>% 
   left_join(arg_df, by="SampleID") %>% 
@@ -81,42 +81,58 @@ meta_arg <- meta_all %>%
 meta_all <- meta_arg
 ```
 
-
-```{r}
+``` r
 meta_all.f = meta_all[complete.cases(meta_all),]
 dim(meta_all.f)
 ```
 
+    ## [1] 702 244
 
-```{r}
+``` r
 ind_genus = intersect(rownames(meta_all.f), rownames(mOTU_genus))
 length(ind_genus)
+```
+
+    ## [1] 690
+
+``` r
 dim(mOTU_genus)
 ```
 
-```{r}
+    ## [1] 1818  710
+
+``` r
 ## only merged / intersection
 meta_all.f.m <- meta_all.f[ind_genus, ]
 mOTU_genus.m <- mOTU_genus[ind_genus, ]
 
 dim(meta_all.f.m)
+```
+
+    ## [1] 690 244
+
+``` r
 dim(mOTU_genus.m)
 ```
 
+    ## [1] 690 710
 
-2. Remove covariates with only zeros
+2.  Remove covariates with only zeros
 
-
-```{r}
+``` r
 sum(colSums(meta_all.f.m!= 0) == 0)
+```
+
+    ## [1] 42
+
+``` r
 meta_all.f.m = meta_all.f.m[, colSums(meta_all.f.m!= 0) > 0]
 ```
 
+Let’s take into account the 30 most abundant genera, remove
+“unclassified”:
 
-
-Let's take into account the 30 most abundant genera, remove "unclassified":
-
-```{r}
+``` r
 order_abund <- order(colSums(mOTU_genus.m), decreasing = T)
 X <- mOTU_genus.m[, order_abund[2:33]]
 ## remove duplicates
@@ -125,21 +141,21 @@ X <- X[, !(colnames(X) %in% c("_Ruminococcus_", "_Bacteroides_"))]
 
 As y we choose the number of ARGs
 
-```{r}
+``` r
 y <- meta_all.f.m$CARD10M
 names(y) <- rownames(meta_all.f.m)
 all(names(y) == rownames(X))
 ```
 
+    ## [1] TRUE
+
 Make sure there are no special characters in the names
 
-```{r}
+``` r
 colnames(X) <- gsub("_", "", colnames(X))
 ```
 
-
-```{r}
-
+``` r
 pseudo_count <- 1
 
 Xm <- as.matrix(X + 0.00001 * matrix(rnorm(length(X)), nrow = nrow(X), ncol = ncol(X)))
@@ -151,7 +167,7 @@ X_rel <- X_psd/rowSums(X_psd)
 
 ### Fit SLC and SLC + int model
 
-```{r message=F, warning=F}
+``` r
 source("R/sparse_log_contrast.R")
 source("R/slc_int.R")
 source("R/slc_int_plots.R")
@@ -159,12 +175,11 @@ source("R/log-ratio-lasso_interactions.R")
 source("R/utils.R")
 ```
 
-```{r}
+``` r
 library(trac)
 ```
 
-
-```{r eval = T, results='hide'}
+``` r
 slc_slc_int_ARGs <- slc_slc_int_all_splits(X = as.matrix(X_rel),
                                              y = y,
                                              method = "regr", output = "raw", ii = "ibest")
@@ -172,11 +187,7 @@ slc_slc_int_ARGs <- slc_slc_int_all_splits(X = as.matrix(X_rel),
 
 ### OOS MS
 
-
-
-
-
-```{r}
+``` r
 nsplit = 10 
 rsq <- function (x, y) cor(x, y) ^ 2
 
@@ -205,68 +216,19 @@ for (r in seq(nsplit)) {
 grid.arrange(grobs = list_plt_slcint[1:3], ncol = 3)
 ```
 
-```{r echo = F,eval = F}
-#saveRDS(t(slc_slc_int_ARGs$beta_int_est_refit), "coef_qlc_relative_ARGs.rds")
-```
+![](04c-ARGs-interactions-relative_files/figure-gfm/unnamed-chunk-17-1.png)<!-- -->
 
-```{r echo = F, eval = T}
-# Assuming you have ggplot2 library loaded
-library(ggplot2)
-
-# Assuming slc_slc_int_species is a data frame with the necessary structure
-
-# Extracting and transforming data for ggplot2
-median_values <- apply(slc_slc_int_ARGs$beta_int_est_refit, 1, median)
-non_zero_columns <- t(slc_slc_int_ARGs$beta_int_est_refit)[, which(abs(median_values) > 2)]
-#saveRDS(colnames(non_zero_columns), "selected-features-qlc-compositions.rds")
-
-
-## build superset of all nonzero coefficients in all three models
-s1 <- readRDS("data/selected-features-APL-counts.rds")
-s2 <- readRDS("data/selected-features-APL-binary.rds")
-s3 <- readRDS("data/selected-features-qlc-compositions.rds")
-sel12 <- union(s1, s2)
-sel123 <- union(sel12, s3)
-non_zero_columns <- t(slc_slc_int_ARGs$beta_int_est_refit)[, sel123]
-
-selected_columns <- grep(":", colnames(non_zero_columns), value = TRUE)
-# Select int. columns from the matrix and multiply them by 100
-non_zero_columns[, selected_columns] <- non_zero_columns[, selected_columns] * 20
-
-
-data_long <- reshape2::melt(as.data.frame(non_zero_columns))
-order_by_nchar <- order(nchar(sel123), decreasing = F)
-order_by_median <- readRDS("data/universal_order_boxplots.rds")
-data_long$variable <- factor(data_long$variable, levels  = rev(order_by_median))
-library(RColorBrewer)
-nb.cols <- length(sel123)
-mycolors <- colorRampPalette(rev(brewer.pal(8, "Blues")))(nb.cols)
-mycolors <- c(rep("steelblue", length(order_by_median)-10), rep("lightblue3", 10))
-
-plt_coef <- ggplot(data_long, aes(x = value, y = variable, fill = variable)) +  # Transposed x and y aesthetics
-  geom_boxplot() +
-  labs(xlab = "Estimated coefficients 10 splits",  # Swapped xlab and ylab
-       ylab = "Features", 
-       title = "Boxplot of Estimated Coefficients (10 splits)") +
-  theme_minimal() +
-  theme(axis.text.y = element_text(angle = 0, vjust = 0.5, hjust = 1, size = 12, color = "black"), axis.text.x = element_text(size = 12, color = "black"),
-        legend.position="none") +
-    scale_fill_manual(values=mycolors)
-```
-
-```{r, echo=F, fig.width=15, fig.height=20}
-plt_coef
-```
-
-
-
-
-
+![](04c-ARGs-interactions-relative_files/figure-gfm/unnamed-chunk-20-1.png)<!-- -->
 
 ## Files written
 
-These files have been written to the target directory, ```r paste0("data/", params$name)```:
+These files have been written to the target directory,
+`data/04c-ARGs-interactions-relative`:
 
-```{r list-files-target}
+``` r
 projthis::proj_dir_info(path_target())
 ```
+
+    ## # A tibble: 0 × 4
+    ## # ℹ 4 variables: path <fs::path>, type <fct>, size <fs::bytes>,
+    ## #   modification_time <dttm>
