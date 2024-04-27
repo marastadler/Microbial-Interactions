@@ -1,21 +1,11 @@
----
-title: "04a-ARGs-interactions-absolute"
-date: "Compiled at `r format(Sys.time(), '%Y-%m-%d %H:%M:%S', tz = 'UTC')` UTC"
-output: github_document
-params:
-  name: "04a-ARGs-interactions-absolute" # change if you rename file
----
+04a-ARGs-interactions-absolute
+================
+Compiled at 2024-04-27 13:28:38 UTC
 
-```{r here, message=FALSE, echo = FALSE}
-here::i_am(paste0(params$name, ".Rmd"), uuid = "176434d7-5d46-4bff-9fa0-4a4f14734bcd")
-knitr::opts_chunk$set(dpi = 200, echo = T, warning = F, message = F)
+The data was imported from the data resources in:
+<https://www.nature.com/articles/s41586-021-04177-9#data-availability>
 
-```
-
-The data was imported from the data resources in: https://www.nature.com/articles/s41586-021-04177-9#data-availability 
-
-
-```{r packages} 
+``` r
 library("conflicted")
 library(dplyr)
 library(tidyr)
@@ -27,27 +17,15 @@ library(glmnet)
 library(RColorBrewer)
 ```
 
-```{r directories , echo = FALSE}
-# create or *empty* the target directory, used to write this file's data: 
-projthis::proj_create_dir_target(params$name, clean = TRUE)
-
-# function to get path to target directory: path_target("sample.csv")
-path_target <- projthis::proj_path_target(params$name)
-
-# function to get path to previous data: path_source("00-import", "sample.csv")
-path_source <- projthis::proj_path_source(params$name)
-```
-
 ### Read data
 
-```{r}
+``` r
 path_data <- "data/"
 mOTU_all <- readRDS(paste0(path_data, "mOTU_all.rds"))
 meta_all <- readRDS(paste0(path_data, "Metadata_all.rds"))
 ```
 
-
-```{r}
+``` r
 ## extract genus level and adjust names
 mOTU_genus <- mOTU_all$Genus
 rownames(mOTU_genus) <- substr(rownames(mOTU_genus), 4, nchar(rownames(mOTU_genus)))
@@ -55,17 +33,30 @@ rownames(mOTU_genus) <- substr(rownames(mOTU_genus), 4, nchar(rownames(mOTU_genu
 mOTU_genus[1:5, 1:5]
 ```
 
+    ##            _Bacteroides_ _Cellvibrio_ _Clostridium_ _Eubacterium_
+    ## x10MCx1134             0            0       3687231             0
+    ## x10MCx1135             0            0       5313951             0
+    ## x10MCx1138             0            0             0             0
+    ## x10MCx1140             0            0      21581161             0
+    ## x10MCx1143             0            0             0             0
+    ##            _Ruminococcus_
+    ## x10MCx1134     3158547431
+    ## x10MCx1135      336839421
+    ## x10MCx1138      208437127
+    ## x10MCx1140      682029749
+    ## x10MCx1143      413187394
 
-1. Remove samples with missing data in the metadata
+1.  Remove samples with missing data in the metadata
 
-
-```{r}
+``` r
 dim(meta_all)
 ```
 
+    ## [1] 2173  243
+
 Read ARG data and add it to meta data
 
-```{r}
+``` r
 arg_df <- read.table(paste0(path_data, "hub.microbiome.summary.down.10000000.r"), sep='\t')
 arg_df <- arg_df %>% 
   pivot_wider(id_cols = "SampleID", names_from="Feature", values_from = "FeatureValue") %>% 
@@ -74,7 +65,17 @@ arg_df <- arg_df %>%
 head(arg_df)
 ```
 
-```{r}
+    ## # A tibble: 6 × 2
+    ##   SampleID   CARD10M
+    ##   <chr>        <dbl>
+    ## 1 x20MCx2508  118088
+    ## 2 x10MCx3076  106544
+    ## 3 x30MCx2303  118960
+    ## 4 x30MCx2933  133495
+    ## 5 x20MCx2635  115226
+    ## 6 x30MCx3237  125620
+
+``` r
 meta_arg <- meta_all %>% 
   tibble::rownames_to_column("SampleID") %>% 
   left_join(arg_df, by="SampleID") %>% 
@@ -82,38 +83,55 @@ meta_arg <- meta_all %>%
 meta_all <- meta_arg
 ```
 
-
-```{r}
+``` r
 meta_all.f = meta_all[complete.cases(meta_all),]
 dim(meta_all.f)
 ```
 
+    ## [1] 702 244
 
-```{r}
+``` r
 ind_genus = intersect(rownames(meta_all.f), rownames(mOTU_genus))
 length(ind_genus)
+```
+
+    ## [1] 690
+
+``` r
 dim(mOTU_genus)
 ```
 
-```{r}
+    ## [1] 1818  710
+
+``` r
 ## only merged / intersection
 meta_all.f.m <- meta_all.f[ind_genus, ]
 mOTU_genus.m <- mOTU_genus[ind_genus, ]
 
 dim(meta_all.f.m)
+```
+
+    ## [1] 690 244
+
+``` r
 dim(mOTU_genus.m)
 ```
 
+    ## [1] 690 710
 
-2. Remove covariates with only zeros
+2.  Remove covariates with only zeros
 
-
-```{r}
+``` r
 sum(colSums(meta_all.f.m!= 0) == 0)
+```
+
+    ## [1] 42
+
+``` r
 meta_all.f.m = meta_all.f.m[, colSums(meta_all.f.m!= 0) > 0]
 ```
 
-```{r}
+``` r
 # Convert the matrix to a data frame
 meta_all_f_m_df <- as.data.frame(meta_all.f.m)
 
@@ -129,19 +147,18 @@ ggplot(meta_all_f_m_df, aes(x = card10m_column)) +
   theme_minimal()
 ```
 
+![](04a-ARGs-interactions-absolute_files/figure-gfm/unnamed-chunk-10-1.png)<!-- -->
 
 ### scale filtered & merged meta data:
 
-```{r}
+``` r
 meta_all.f.m.sc <- scale(meta_all.f.m)
 ```
 
+Let’s take into account the 30 most abundant genera, remove
+“unclassified”:
 
-
-
-Let's take into account the 30 most abundant genera, remove "unclassified":
-
-```{r}
+``` r
 order_abund <- order(colSums(mOTU_genus.m), decreasing = T)
 X <- mOTU_genus.m[, order_abund[2:33]]
 ## remove duplicates
@@ -150,24 +167,22 @@ X <- X[, !grepl("^_", colnames(X))]
 
 As y we choose the number of ARGs
 
-```{r}
+``` r
 y <- meta_all.f.m$CARD10M
 #y <- meta_all.f.m$DOSAGE_METFORMIN_C
 names(y) <- rownames(meta_all.f.m)
 all(names(y) == rownames(X))
 ```
 
+    ## [1] TRUE
 
-
-
-
-```{r}
+``` r
 rsq <- function (x, y) cor(x, y) ^ 2
 ```
 
 ## All pairs-lasso
 
-```{r}
+``` r
 fit.glmnet <- list()
 cvfit.glmnet<- list()
 yhat_tr.glmnet <- list()
@@ -213,7 +228,7 @@ for(r in seq(nsplit)){
 
 boxplot of coefficients over 10 train-test splits for figure 1
 
-```{r}
+``` r
 p = ncol(X)
 coef_mat_allsplits.glmnet <- matrix(nrow = p * (p - 1) /2 + p, ncol = nsplit)
 for(r in seq(nsplit)){
@@ -252,11 +267,9 @@ plt_coef <- ggplot(data_long, aes(y= value, x = variable, fill = variable)) +  #
     scale_fill_manual(values=mycolors)
 ```
 
-
-
 boxplot of coefficients over 10 train-test splits for figure 5
 
-```{r}
+``` r
 p = ncol(X)
 coef_mat_allsplits.glmnet <- matrix(nrow = p * (p - 1) /2 + p, ncol = nsplit)
 for(r in seq(nsplit)){
@@ -269,66 +282,9 @@ coef_mat_allsplits.glmnet <- t(coef_mat_allsplits.glmnet)
 #saveRDS(coef_mat_allsplits.glmnet, "coef_APL_counts_ARGs.rds")
 ```
 
-```{r eval = T, echo = F}
+![](04a-ARGs-interactions-absolute_files/figure-gfm/unnamed-chunk-19-1.png)<!-- -->
 
-feature_median <- apply(coef_mat_allsplits.glmnet, 2, median)
-
-# Filter columns with non-zero median for plotting
-selected_columns <- coef_mat_allsplits.glmnet[, abs(feature_median) > 50]
-#saveRDS(colnames(selected_columns), "selected-features-APL-counts.rds")
-
-
-## build superset of all nonzero coefficients in all three models
-s1 <- readRDS("data/selected-features-APL-counts.rds")
-s2 <- readRDS("data/selected-features-APL-binary.rds")
-s3 <- readRDS("data/selected-features-qlc-compositions.rds")
-sel12 <- union(s1, s2)
-sel123 <- union(sel12, s3)
-non_zero_columns <- coef_mat_allsplits.glmnet[, sel123]
-
-
-# Get column names without ":"
-selected_columns_main <- colnames(non_zero_columns)[!grepl(":", colnames(non_zero_columns))]
-
-
-selected_columns_int <- grep(":", colnames(non_zero_columns), value = TRUE)
-
- 
-
-data_long <- reshape2::melt(as.data.frame(non_zero_columns))
-main_ord <- abs(apply(non_zero_columns, 2, median))[selected_columns_main]
-ind_ord <- abs(apply(non_zero_columns, 2, median))[selected_columns_int]
-order_by_median <- c(names(sort(main_ord, decreasing = T)),
-                     names(sort(ind_ord, decreasing = T)))
-#saveRDS(order_by_median, "data/universal_order_boxplots.rds")
-
-data_long$variable <- factor(data_long$variable, levels  = rev(order_by_median))
-
-nb.cols <- length(sel123)
-mycolors <- rep(colorRampPalette(brewer.pal(12, "Set3"))(12), 5)
-mycolors <- c(rep("steelblue", length(ind_ord)), rep("lightblue3", length(main_ord)))
-
-plt_coef <- ggplot(data_long, aes(x = value, y = variable, fill = variable)) +  # Transposed x and y aesthetics
-  geom_boxplot() +
-  labs(xlab = "Estimated coefficients 10 splits",  # Swapped xlab and ylab
-       ylab = "Features", 
-       title = "Boxplot of Estimated Coefficients (10 splits)") +
-  theme_minimal() +
-  theme(axis.text.y = element_text(angle = 0, vjust = 0.5, hjust = 1, 
-                                   size = 13, color = "black"), axis.text.x =
-          element_text(size = 12, color = "black"),
-        legend.position="none") +
-    scale_fill_manual(values=mycolors)
-```
-
-```{r, echo=F, fig.width=15, fig.height=20}
-
-plt_coef
-```
-
-
-
-```{r}
+``` r
 list_plt_glmnet <- list()
 for (r in seq(nsplit)) {
   data <- data.frame(Observed = y[-tr[[r]]], Predicted = as.vector(yhat_te.glmnet[[r]]))
@@ -351,7 +307,9 @@ for (r in seq(nsplit)) {
 grid.arrange(grobs = list_plt_glmnet[1:2], ncol = 2)
 ```
 
-```{r}
+![](04a-ARGs-interactions-absolute_files/figure-gfm/unnamed-chunk-20-1.png)<!-- -->
+
+``` r
 Rsq <- c()
 for(r in seq(nsplit)){
   Rsq[r] <- rsq(y[-tr[[r]]], as.vector(yhat_te.glmnet[[r]]))
@@ -359,12 +317,17 @@ for(r in seq(nsplit)){
 mean(Rsq)
 ```
 
-
+    ## [1] 0.5240501
 
 ## Files written
 
-These files have been written to the target directory, ```r paste0("data/", params$name)```:
+These files have been written to the target directory,
+`data/04a-ARGs-interactions-absolute`:
 
-```{r list-files-target}
+``` r
 projthis::proj_dir_info(path_target())
 ```
+
+    ## # A tibble: 0 × 4
+    ## # ℹ 4 variables: path <fs::path>, type <fct>, size <fs::bytes>,
+    ## #   modification_time <dttm>
