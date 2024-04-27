@@ -1,55 +1,13 @@
----
-title: "Butyrate production: sparse quadratic interaction model"
-date: "Compiled at `r format(Sys.time(), '%Y-%m-%d %H:%M:%S', tz = 'UTC')` UTC"
-output: github_document
-params:
-  name: "03-clark-butyrate-interactions" # change if you rename file
----
-
-```{r here, message=FALSE, echo = F}
-here::i_am(paste0(params$name, ".Rmd"), uuid = "6c0fa115-9b64-493f-bc0b-b160949fbb5b")
-knitr::opts_chunk$set(dpi = 200, echo = T, warning = F)
-```
-
-
-
-```{r packages, echo = F, warning = F, message=F}
-library("conflicted")
-library(openxlsx)
-library(ggplot2)
-library(pheatmap)
-library(RColorBrewer)
-#devtools::install_github("marastadler/hierNet")
-library("hierNet")
-library("stabs")
-library(reshape2)
-library(tidyverse)
-library(hrbrthemes)
-library(viridis)
-library(forcats)
-library(gridExtra)
-library(glmnet)
-library(ggrepel)
-```
-
-
-
-```{r directories, echo = F}
-# create or *empty* the target directory, used to write this file's data: 
-projthis::proj_create_dir_target(params$name, clean = TRUE)
-
-# function to get path to target directory: path_target("sample.csv")
-path_target <- projthis::proj_path_target(params$name)
-
-# function to get path to previous data: path_source("00-import", "sample.csv")
-path_source <- projthis::proj_path_source(params$name)
-```
+Butyrate production: sparse quadratic interaction model
+================
+Compiled at 2024-04-27 13:05:39 UTC
 
 ### Import data
 
-The data was imported from: https://github.com/abbyskwara2/regression_on_landscapes
+The data was imported from:
+<https://github.com/abbyskwara2/regression_on_landscapes>
 
-```{r}
+``` r
 butyrate <- read.csv("data/butyrate.csv")
 y <- butyrate$fitness
 X <- butyrate[, 1 : (ncol(butyrate) - 1)]
@@ -57,25 +15,28 @@ X <- butyrate[, 1 : (ncol(butyrate) - 1)]
 dim(X)
 ```
 
+    ## [1] 1561   25
+
 ### Plot Design matrix B
 
-```{r}
+``` r
 pheatmap(X, cluster_rows = F, cluster_cols = F, color = c("white", "grey"),
          fontsize_row = 0.001)
 ```
 
+![](03-clark-butyrate-interactions_files/figure-gfm/unnamed-chunk-2-1.png)<!-- -->
+
 ### Compute interactions
 
-```{r echo = T}
+``` r
 X <- as.matrix(X)
 X_interactions <- cbind(X, hierNet::compute.interactions.c(X, diagonal = F)) 
 dim(X_interactions)
 ```
 
+    ## [1] 1561  325
 
-
-
-```{r}
+``` r
 ggplot(data = data.frame(value = y), aes(x = value)) +
   geom_histogram(binwidth = (max(y) - min(y))/100, fill = "white", color = "black") +
   labs(title = "Histogram of y",
@@ -83,29 +44,16 @@ ggplot(data = data.frame(value = y), aes(x = value)) +
        y = "Frequency") + theme_minimal()
 ```
 
-
+![](03-clark-butyrate-interactions_files/figure-gfm/unnamed-chunk-4-1.png)<!-- -->
 
 ## HierNet for binary input data
 
-
-```{r echo = F}
-source('R/functions.R')
-```
-
-```{r eval = F}
+``` r
 fit.weak.butyrate <- hiernet.stabsel.all(X = X, Y = as.matrix(y),
                                             selection_probability = 0.6)
 ```
 
-```{r echo = F, eval = F}
-saveRDS(fit.weak.butyrate, "temp/fit.weak.butyrate_stabs.rds")
-```
-
-```{r echo = F}
-fit.weak.butyrate <- readRDS("temp/fit.weak.butyrate_stabs.rds")
-```
-
-```{r}
+``` r
 # Sort the 'max' column in descending order and select the top 40 values
 top_values <- head(sort(fit.weak.butyrate[[1]]$max, decreasing = TRUE), 35)
 
@@ -123,95 +71,11 @@ sel_prob_barplot <- ggplot(data, aes(x = x, y = y)) +
 sel_prob_barplot
 ```
 
-```{r results='hide', echo = F}
-## fit model with cv only (no StabSel)
+![](03-clark-butyrate-interactions_files/figure-gfm/unnamed-chunk-9-1.png)<!-- -->
 
-nlam = 30
+    ## [1] 325  10
 
-## with passing zz we avoid that zz gets computed based on the scaled x
-## which is not wanted for binary features
-zz_binary <- compute.interactions.c(X, diagonal = FALSE)
-
-## train test splits
-
-set.seed(123)
-nsplit <- 10
-ntot <- length(y)
-p <- ncol(X)
-n <- round(2/3 * ntot)
-
-tr <- list()
-fit <- list()
-fitcv <- list()
-fitfinal <- list()
-yhat_tr <- list()
-yhat_te <- list()
-trainerr <- list()
-testerr <- list()
-nnz <- list()
-coefmatrix_lam <- list()
-lamhat <- list()
-
-nlam = 20
-for(r in seq(nsplit)){
-  cat("split", r)
-  set.seed(r)
-  tr[[r]] <- sample(ntot, n)
-  fit[[r]] <- hierNet::hierNet.path(X[tr[[r]], ], y[tr[[r]]], 
-                                    nlam = nlam,
-                                   diagonal = FALSE, strong = FALSE,
-                                   stand.int = FALSE, stand.main = TRUE,
-                                   zz = zz_binary[tr[[r]], ]
-  )
-  
-  
-  
-  fitcv[[r]] <- hierNet::hierNet.cv(fit[[r]], X[tr[[r]], ], y[tr[[r]]], nfolds = 5)
-  
-  lamhat[[r]] = fitcv[[r]]$lamhat
-  fitfinal[[r]] <- hierNet(x = X[tr[[r]], ],
-                      y = y[tr[[r]]],
-                      zz = zz_binary[tr[[r]], ],
-                      lam = lamhat[[r]], diagonal = FALSE, strong = FALSE,
-                      stand.int = FALSE, stand.main = TRUE)
-  #toc()
-  p <- ncol(X)
-  coefmatrix_lam[[r]] <- matrix(nrow = p * (p + 1)/2, ncol = nlam)
-  
-  linear_coef <- fit[[r]]$bp - fit[[r]]$bn ## linear coefficients
-  
-  for(lam in 1:length(fit[[r]]$lamlist)){
-    print(lam)
-    theta <- (fit[[r]]$th[, , lam] + t(fit[[r]]$th[, , lam]))/2 ## symmetrize theta
-    interact_coef <- theta[lower.tri(theta)]
-    
-    coefmatrix_lam[[r]][, lam] <- c(linear_coef[, lam], interact_coef) ## combine linear effects and interactions
-    rownames(coefmatrix_lam[[r]]) <- c(colnames(X), colnames(zz_binary))
-  }
-  yhat_tr[[r]] <- predict(fitfinal[[r]], X[tr[[r]], ])
-  yhat_te[[r]] <- predict(fitfinal[[r]], X[-tr[[r]], ])
-}
-
-rsq <- function (x, y) cor(x, y) ^ 2
-for(r in seq(nsplit)){
-  print(rsq(y[tr[[r]]], yhat_tr[[r]]))
-  print(rsq(y[-tr[[r]]], yhat_te[[r]]))
-}
-```
-
-
-```{r echo = F}
-coef_mat_allsplits <- matrix(nrow = nrow(coefmatrix_lam[[1]]), ncol = nsplit)
-rownames(coef_mat_allsplits) <- c(colnames(X), colnames(zz_binary))
-for(i in seq(nsplit)){
-  i_lam_best <- which(fitcv[[i]]$lamlist == fitcv[[i]]$lamhat)
-  coef_mat_allsplits[,i] <- coefmatrix_lam[[i]][, i_lam_best ]
-}
-dim(coef_mat_allsplits)
-coef_mat_allsplits <- t(coef_mat_allsplits)
-```
-
-```{r}
+``` r
 # Convert matrix to data frame for ggplot
 coef_df <- data.frame(coef_mat_allsplits)
 
@@ -220,6 +84,11 @@ selected_features <- which(apply(coef_mat_allsplits, 2, function(x) median(abs(x
 
 # Reshape the data for ggplot2 using melt, preserving ":" character in feature names
 coef_df_melted <- melt(coef_df[, selected_features])
+```
+
+    ## No id variables; using all as measure variables
+
+``` r
 coef_df_melted$variable <- gsub("\\.", ":", coef_df_melted$variable)
 
 coef_df_melted$variable <- factor(coef_df_melted$variable,
@@ -233,12 +102,11 @@ ggplot(coef_df_melted, aes(x = variable, y = value)) +
        y = "Coefficient Values") +
   theme_minimal() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
-
 ```
 
+![](03-clark-butyrate-interactions_files/figure-gfm/unnamed-chunk-12-1.png)<!-- -->
 
-
-```{r}
+``` r
 # Create a list to store ggplot objects
 plots_list <- list()
 
@@ -262,13 +130,13 @@ for (r in seq(nsplit)) {
 
 # Arrange all ggplot objects in a grid
 grid.arrange(grobs = plots_list[1:4], ncol = 2)  
-
 ```
+
+![](03-clark-butyrate-interactions_files/figure-gfm/unnamed-chunk-13-1.png)<!-- -->
 
 # All-pairs lasso
 
-
-```{r}
+``` r
 fit.glmnet <- list()
 cvfit.glmnet<- list()
 yhat_tr.glmnet <- list()
@@ -292,9 +160,7 @@ rownames(coef_mat_allsplits.glmnet) <- colnames(coef_mat_allsplits)
 coef_mat_allsplits.glmnet <- t(coef_mat_allsplits.glmnet)
 ```
 
-
-
-```{r}
+``` r
 # Convert matrix to data frame for ggplot
 coef_df <- data.frame(coef_mat_allsplits.glmnet)
 
@@ -303,6 +169,11 @@ selected_features <- which(apply(coef_mat_allsplits.glmnet, 2, function(x) media
 
 # Reshape the data for ggplot2 using melt, preserving ":" character in feature names
 coef_df_melted <- melt(coef_df[, selected_features])
+```
+
+    ## No id variables; using all as measure variables
+
+``` r
 coef_df_melted$variable <- gsub("\\.", ":", coef_df_melted$variable)
 
 coef_df_melted$variable <- factor(coef_df_melted$variable,
@@ -315,14 +186,11 @@ ggplot(coef_df_melted, aes(x = variable, y = value)) +
        y = "Coefficient Values") +
   theme_minimal() +
   theme(axis.text.x = element_text(angle = 90, hjust = 1, size = 4))
-
 ```
 
+![](03-clark-butyrate-interactions_files/figure-gfm/unnamed-chunk-15-1.png)<!-- -->
 
-
-
-
-```{r}
+``` r
 # Create a list to store ggplot objects
 plots_list <- list()
 
@@ -346,58 +214,23 @@ for (r in seq(nsplit)) {
 
 # Arrange all ggplot objects in a grid
 grid.arrange(grobs = plots_list[1:4], ncol = 2)  
-
 ```
 
+![](03-clark-butyrate-interactions_files/figure-gfm/unnamed-chunk-16-1.png)<!-- -->
 
-Scatterplot coef. hierNet vs. APL
+Scatterplot coef. hierNet vs. APL
 
-```{r echo = F}
-# Assuming you have two matrices: coef_mat_allsplits and coef_mat_allsplits.glmnet
-
-# Calculate column means and create a data frame with the means and column names
-data <- data.frame(
-  coef_mat_allsplits = apply(coef_mat_allsplits, 2, median),
-  coef_mat_allsplits_glmnet = apply(coef_mat_allsplits.glmnet, 2, median),
-  row_names = colnames(coef_mat_allsplits)
-)
-data$Model <- ifelse(grepl(":", data$row_names), "Interaction", "Main Effect")
-
-data$coef_mat_allsplits_glmnet <- 1/2 * data$coef_mat_allsplits_glmnet
-
-
-# Filter the data frame to include only labels for non-zero points
-data_filtered <- data[abs(data$coef_mat_allsplits) > 0 & abs(data$coef_mat_allsplits_glmnet) > 0,]
-
-
-# Create ggplot
-plt_scat <- ggplot(data, aes(x = coef_mat_allsplits, y = coef_mat_allsplits_glmnet, label = row_names, color = Model)) +
-  geom_point(alpha = .9, size = 3) +
-  scale_color_manual(values = c("Main Effect" = "lightblue3", "Interaction" = "steelblue")) +
-
-  geom_text_repel(data = data_filtered, hjust = 0, vjust = 1, max.overlaps = 19, size = 4,
-                  color = "black") +  # Use geom_text_repel instead of geom_text
-  geom_abline(intercept = 0, slope = 1, color = "grey", linetype = "dashed") +  # Add diagonal line
-  labs(x = "Median coefficients hierarchical quadratic Lasso (hierNet)",
-       y = "Median coefficients quadratic Lasso (APL)",
-       title = "") +
-  theme_minimal() +
-  theme(legend.position = "") + 
-   theme(axis.text.x = element_text(color = "black", size = 11),
-        axis.text.y = element_text(color = "black", size = 11))
-
-plt_scat
-```
-
-
-
-
-
+![](03-clark-butyrate-interactions_files/figure-gfm/unnamed-chunk-17-1.png)<!-- -->
 
 ## Files written
 
-These files have been written to the target directory, ```r paste0("data/", params$name)```:
+These files have been written to the target directory,
+`data/03-clark-butyrate-interactions`:
 
-```{r list-files-target}
+``` r
 projthis::proj_dir_info(path_target())
 ```
+
+    ## # A tibble: 0 × 4
+    ## # ℹ 4 variables: path <fs::path>, type <fct>, size <fs::bytes>,
+    ## #   modification_time <dttm>
