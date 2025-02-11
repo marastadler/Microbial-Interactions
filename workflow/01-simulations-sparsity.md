@@ -1,6 +1,6 @@
 Semi-synthetic data example: Impact of sparsity
 ================
-Compiled at 2024-04-27 12:11:45 UTC
+Compiled at 2025-02-11 09:03:32 UTC
 
 #### Document overview
 
@@ -28,10 +28,7 @@ library(reshape2)
 ## load data
 ## This dataset was processed and aggregated in 
 ## https://github.com/jacobbien/trac-reproducible.
-
 path.data <- path.data <- "data/"
-
-
 source("R/sparse_log_contrast.R")
 source("R/slc_int.R")
 source("R/slc_int_plots.R")
@@ -71,11 +68,8 @@ dense to sparse).
 sort_sparstiy <- order(colSums(X_OTU != 0)/nrow(X_OTU), decreasing = T)
 X_OTU <- X_OTU[, sort_sparstiy]
 colnames(X_OTU) <- paste0("f", 1:ncol(X_OTU))
-
-
 library(ggplot2)
 library(dplyr)
-
 data.frame("Sparsity" = colSums(X_OTU != 0)/nrow(X_OTU),
            "Feature" = factor(colnames(X_OTU), levels = colnames(X_OTU)) ) %>% 
   ggplot(aes(x = Feature, y = Sparsity)) +
@@ -88,7 +82,8 @@ data.frame("Sparsity" = colSums(X_OTU != 0)/nrow(X_OTU),
 ```
 
 ![](01-simulations-sparsity_files/figure-gfm/unnamed-chunk-2-1.png)<!-- -->
-For runtime reasons we subsample 80 features features from X.
+
+For runtime reasons we subsample 50 features features from X.
 
 ``` r
 X_OTU_init <- X_OTU
@@ -96,7 +91,6 @@ set.seed(123)
 X_OTU <- X_OTU_init[, sort(sample(1:ncol(X_OTU_init), 50))]
 X_OTU[, 49] <- X_OTU_init[, ncol(X_OTU_init) - 1]
 X_OTU[, 50] <- X_OTU_init[, ncol(X_OTU_init)]
-
 ## rename again f1,...,f50
 colnames(X_OTU) <- paste0("f", 1:50)
 ```
@@ -205,9 +199,6 @@ df_countSum_int[which(df_countSum_int$Feature %in% int_all), ]
     ## f39:f40 234.98968 f39:f40
     ## f49:f50  80.34728 f49:f50
 
-Correlatedness among the one interaction feature and the three main
-effects (should be uncorrelated!!)
-
 ``` r
 cor_mat <- cor(cbind(X_OTU_rel[, c(1:3)], X_OTU_interact[, int_all]),
     use = "pairwise.complete.obs", method = "kendall")
@@ -251,7 +242,6 @@ names(mean_cor) <- int_all
 for(i in int_all){
   mean_cor[i] <- round(max(abs(cor_mat[i, 1:3])), 2)
 }
-
 mean_cor
 ```
 
@@ -275,19 +265,15 @@ eff_size <- colSums(abs(X_OTU_interact[, int_all]))
 ## 3 nonzero main effects
 beta_main <-  c(10, 20, -30) 
 main_part = log(X_OTU_rel[, c(1:3)]) %*% beta_main
-
-
 ## One nonzero interaction effect
 interaction_part <- list()
 Y_sim_int <- list()
 set.seed(123)
 noise <- 10 * rnorm(nrow(X_OTU_rel))
-
 i <- 0
 for(m in int_all){
   i <- i + 1
   beta_interact = 3
-  
   interaction_part[[i]] = X_OTU_interact[, m] * beta_interact
   Y_sim_int[[i]] <- 10 + main_part + interaction_part[[i]] + noise
   Y_sim_int[[i]] <- as.numeric(Y_sim_int[[i]])
@@ -296,9 +282,7 @@ for(m in int_all){
 
 ``` r
 n_m <- length(int_all)
-
 slc_slc_int <- list()
-
 for(i in 1:n_m) {
   print(paste("Model:", i))
   slc_slc_int[[i]] <- slc_slc_int_all_splits(X = as.matrix(X_OTU_rel),
@@ -311,18 +295,15 @@ for(i in 1:n_m) {
 ```
 
 ![](01-simulations-sparsity_files/figure-gfm/unnamed-chunk-17-1.png)<!-- -->![](01-simulations-sparsity_files/figure-gfm/unnamed-chunk-17-2.png)<!-- -->![](01-simulations-sparsity_files/figure-gfm/unnamed-chunk-17-3.png)<!-- -->![](01-simulations-sparsity_files/figure-gfm/unnamed-chunk-17-4.png)<!-- -->![](01-simulations-sparsity_files/figure-gfm/unnamed-chunk-17-5.png)<!-- -->
-\### How good are the models in terms of squared distances for the
-different noise levels?
+
+### How good are the models in terms of squared distances for the different noise levels?
 
 ``` r
 ## True coefficients
 p = ncol(X_OTU)
-
 beta_main_all <- rep(0, p)
 beta_main_all[c(1:3)] <- beta_main
-
 beta_main_int_all <- matrix(nrow = p * (p + 1)/2, ncol = n_m)
-
 rownames(beta_main_int_all) <- c(paste0("f", as.character(1:p)), colnames(X_OTU_interact))
 for(i in 1:n_m){
   beta_main_int_all[c(paste0("f", as.character(1:3)), int_all[i]), i] <- c(beta_main, beta_interact)
@@ -346,9 +327,7 @@ beta_main_int_all[which(rowSums(beta_main_int_all) != 0), ]
 ``` r
 ## Calculate squared distances
 nsplit = 10
-
 dist_nf_int <- matrix(nrow = nsplit, ncol = n_m)
-
 for(i in 1:n_m){
   int_i <- int_all[i]
   ## extract beta estimates (1se) for each train-test split
@@ -356,7 +335,6 @@ for(i in 1:n_m){
   #beta_est_int[abs(beta_est_int) < 5] <- 0
   #dist_nf_int[, i] = colSums(sqrt((beta_est_int - beta_main_int_all[, i])^2))
   dist_nf_int[, i] = sqrt((beta_est_int[int_i, ] - beta_main_int_all[int_i, i])^2)
-  
 }
 colnames(dist_nf_int) <- int_all
 ```
@@ -367,7 +345,6 @@ colnames(dist_nf_int) <- int_all
 dist_nf_int_ <- dist_nf_int
 colnames(dist_nf_int_) <- paste0(colnames(dist_nf_int),
                                 " (", round(1- df_sparse_int[colnames(dist_nf_int), ]$Sparsity, 2), ")")
-
 # Load the ggplot2 library
 library(ggplot2)
 dist_nf_int.l <- reshape2::melt(dist_nf_int_)
@@ -430,7 +407,6 @@ for(i in 1:5){
   colnames_main_nz = paste0("f", as.character(1:3)),
   colnames_int_nz =  int_all[i], 
   feature_names = rownames(slc_slc_int[[i]]$beta_int_est_refit))
-
   if(i == 1){
   print(plt_path)
   }
@@ -438,6 +414,370 @@ for(i in 1:5){
 ```
 
 ![](01-simulations-sparsity_files/figure-gfm/unnamed-chunk-22-1.png)<!-- -->
+
+## Synthetic scenarios with more main + interaction effects
+
+### OTU level
+
+``` r
+X_OTU <- dat_OTU$x 
+sort_sparstiy <- order(colSums(X_OTU != 0)/nrow(X_OTU), decreasing = T)
+X_OTU <- X_OTU[, sort_sparstiy]
+colnames(X_OTU) <- paste0("f", 1:ncol(X_OTU))
+```
+
+For runtime reasons we subsample 50 features features from X.
+
+``` r
+X_OTU_init <- X_OTU
+set.seed(123)
+X_OTU <- X_OTU_init[, sort(sample(1:ncol(X_OTU_init), 50))]
+X_OTU[, 49] <- X_OTU_init[, ncol(X_OTU_init) - 1]
+X_OTU[, 50] <- X_OTU_init[, ncol(X_OTU_init)]
+## rename again f1,...,f50
+colnames(X_OTU) <- paste0("f", 1:50)
+```
+
+### Transform data
+
+``` r
+## add pseudo count and build relative abundances
+pseudo_count <- 1
+X_OTU_psd <- as.matrix(X_OTU + pseudo_count)
+X_OTU_rel <- X_OTU_psd/rowSums(X_OTU_psd)
+```
+
+``` r
+## compute interactions 
+X_OTU_interact <- compute.interactions.aitchison(X_OTU_rel)
+```
+
+``` r
+## 3 nonzero main effects
+set.seed(123)
+beta_main <-  rnorm(15, mean = 0, sd = 20)
+main_part = log(X_OTU_rel[, c(1:15)]) %*% beta_main
+## One nonzero interaction effect
+interaction_part <- list()
+Y_sim_int <- list()
+set.seed(123)
+noise <- 10 * rnorm(nrow(X_OTU_rel))
+int_all <- c(1:10)
+set.seed(123)
+beta_interact = rnorm(10, mean = 0, sd = 20)
+i=1
+interaction_part[[i]] = X_OTU_interact[, 1:10] %*% beta_interact
+Y_sim_int[[i]] <- 10 + main_part + interaction_part[[i]] + noise
+Y_sim_int[[i]] <- as.numeric(Y_sim_int[[i]])
+```
+
+``` r
+slc_slc_int <- list()
+for(i in 1) {
+  print(paste("Model:", i))
+  slc_slc_int[[i]] <- slc_slc_int_all_splits(X = as.matrix(X_OTU_rel),
+                                                             y = Y_sim_int[[i]],
+                                                             method = "regr", output = "raw",
+                                             nbsplit = 10,
+                                             #nbsplit = 5,
+                                             ii = "i1se")
+}
+```
+
+``` r
+library(ggplot2)
+mod <- slc_slc_int
+# Prepare data
+predicted <- rowMeans(mod[[1]]$beta_int_est_refit)
+observed <- c(beta_main, rep(0, 35), beta_interact, rep(0, 1275 - 60))
+# Create a group variable
+group <- ifelse(1:length(predicted) <= 50, "Main effects", "Interaction effects")
+data <- data.frame(predicted = predicted, observed = observed, group = group)
+# Create ggplot
+ggplot(data, aes(x = predicted, y = observed, color = group)) +
+  geom_point() +
+  geom_abline(intercept = 0, slope = 1, color = "red", linetype = "dashed") +
+  scale_color_manual(values = c("Main effects" = "lightblue", "Interaction effects" = "darkblue")) +
+  labs(x = "Predicted", y = "Observed", title = "Predicted vs Observed", color = "Group") +
+  theme_minimal()
+```
+
+![](01-simulations-sparsity_files/figure-gfm/unnamed-chunk-29-1.png)<!-- -->
+
+### Regularization path
+
+``` r
+i = 1  
+nam = rownames(slc_slc_int[[i]]$beta_int_est_refit)
+plt_path <- ggplot_path2(
+  slc_int = slc_slc_int[[i]]$fit_int, 
+  cvslc_int = slc_slc_int[[i]]$cvfit_int, 
+  p = ncol(X_OTU),
+  #main = paste0("Model s=", i), r = 1,
+  colnames_main_nz = paste0("f", as.character(1:30)),
+  colnames_int_nz =  nam[51:length(nam)][int_all], 
+  feature_names = nam
+)
+```
+
+### Family level
+
+``` r
+i = "Family"
+dat_Family <- dat_list[[i]]
+X_Family <- dat_Family$x
+## 50 most abundant families
+abund_fam <- colSums(X_Family != 0)
+abund_fam <- names(sort(abund_fam))
+X_Family <- X_Family[, abund_fam[1:50]]
+y_BMI <- dat_Family$y
+colnames(X_Family) <- paste0("f", 1:ncol(X_Family))
+dim(X_Family)
+```
+
+    ## [1] 6266   50
+
+### Transform data
+
+``` r
+## add pseudo count and build relative abundances
+pseudo_count <- 1
+X_Family_psd <- as.matrix(X_Family + pseudo_count)
+X_Family_rel <- X_Family_psd/rowSums(X_Family_psd)
+```
+
+``` r
+## compute interactions 
+X_Family_interact <- compute.interactions.aitchison(X_Family_rel)
+```
+
+### 1. 15 main effects, 20 interaction effects
+
+``` r
+## nonzero main effects
+set.seed(123)
+pnz <- 15
+beta_main <-  rnorm(pnz, mean = 0, sd = 20)
+main_part = log(X_Family_rel[, c(1:pnz)]) %*% beta_main
+## One nonzero interaction effect
+interaction_part <- list()
+Y_sim_int <- list()
+set.seed(123)
+noise <-  rnorm(nrow(X_Family_rel))
+int_all <- c(1:20)
+set.seed(123)
+beta_interact = rnorm(length(int_all), mean = 0, sd = 20)
+i=1
+interaction_part[[i]] = X_Family_interact[, 1:length(int_all)] %*% beta_interact
+Y_sim_int[[i]] <- 10 + main_part + interaction_part[[i]] + noise
+Y_sim_int[[i]] <- as.numeric(Y_sim_int[[i]])
+```
+
+``` r
+slc_slc_int1 <- list()
+i = 1
+slc_slc_int1[[i]] <- slc_slc_int_all_splits(X = as.matrix(X_Family_rel),
+                                           y = Y_sim_int[[i]],
+                                           method = "regr", output = "raw",
+                                           nbsplit = 10,
+                                           #nbsplit = 5,
+                                           ii = "i1se")
+```
+
+``` r
+library(ggplot2)
+mod <- slc_slc_int1
+# Prepare data
+## mean over 10 train-test splits
+beta_hat <- rowMeans(mod[[1]]$beta_int_est_refit)
+beta_true <- c(beta_main, rep(0, ncol(X_Family) - pnz), beta_interact, 
+               rep(0, ncol(X_Family_interact) - length(int_all)))
+# Create a group variable
+group <- ifelse(1:length(beta_hat) <= 10, "Main effects", "Interaction effects")
+data <- data.frame(beta_hat = beta_hat, beta_true = beta_true, group = group)
+estim_err <- mod[[1]]$beta_int_est_refit - beta_true
+(mean_abs_estim_err <- mean(colMeans(abs(estim_err))))
+```
+
+    ## [1] 0.1234041
+
+``` r
+mean(colMeans(abs(mod[[1]]$beta_int_est_refit)))
+```
+
+    ## [1] 0.4457304
+
+``` r
+# Create ggplot
+scatterplt <- ggplot(data, aes(x = beta_hat, y = beta_true, color = group)) +
+  geom_point() +
+  geom_abline(intercept = 0, slope = 1, color = "red", linetype = "dashed") +
+  scale_color_manual(values = c("Main effects" = "lightblue", "Interaction effects" = "darkred")) +
+  labs(x = "Mean estimates (10 train-test splits)", y = "True coefficient", title = "", color = "Group") +
+  theme_minimal() + 
+  theme(axis.text.x = element_text(colour = "black", size = 12),
+        axis.ticks.x = element_blank(),
+        axis.text.y = element_text(colour = "black", size = 12),
+        axis.ticks.y = element_line(colour = "black"))
+# ggsave(paste0(path, "sim_suppl_1_scatter.pdf"), scatterplt, height = 3.5, width = 4.5)
+```
+
+### R squared
+
+![](01-simulations-sparsity_files/figure-gfm/unnamed-chunk-37-1.png)<!-- -->
+\### 2. 30 main effects, 40 interactions
+
+``` r
+## nonzero main effects
+set.seed(123)
+pnz <- 30
+beta_main <-  rnorm(pnz, mean = 0, sd = 20)
+main_part = log(X_Family_rel[, c(1:pnz)]) %*% beta_main
+## One nonzero interaction effect
+interaction_part <- list()
+Y_sim_int <- list()
+set.seed(123)
+noise <-  rnorm(nrow(X_Family_rel))
+int_all <- c(1:40)
+set.seed(123)
+beta_interact = rnorm(length(int_all), mean = 0, sd = 20)
+i=1
+interaction_part[[i]] = X_Family_interact[, 1:length(int_all)] %*% beta_interact
+Y_sim_int[[i]] <- 10 + main_part + interaction_part[[i]] + noise
+Y_sim_int[[i]] <- as.numeric(Y_sim_int[[i]])
+```
+
+``` r
+slc_slc_int2 <- list()
+for(i in 1) {
+  print(paste("Model:", i))
+  slc_slc_int2[[i]] <- slc_slc_int_all_splits(X = as.matrix(X_Family_rel),
+                                                             y = Y_sim_int[[i]],
+                                                             method = "regr", output = "raw",
+                                             nbsplit = 10,
+                                             #nbsplit = 5,
+                                             ii = "i1se")
+}
+```
+
+``` r
+library(ggplot2)
+mod <- slc_slc_int2
+# Prepare data
+## mean over 10 train-test splits
+beta_hat <- rowMeans(mod[[1]]$beta_int_est_refit)
+beta_true <- c(beta_main, rep(0, ncol(X_Family) - pnz), beta_interact, 
+               rep(0, ncol(X_Family_interact) - length(int_all)))
+# Create a group variable
+group <- ifelse(1:length(beta_hat) <= 10, "Main effects", "Interaction effects")
+data <- data.frame(beta_hat = beta_hat, beta_true = beta_true, group = group)
+estim_err <- mod[[1]]$beta_int_est_refit - beta_true
+(mean_abs_estim_err <- mean(colMeans(abs(estim_err))))
+```
+
+    ## [1] 0.3252209
+
+``` r
+mean(colMeans(abs(mod[[1]]$beta_int_est_refit)))
+```
+
+    ## [1] 0.8884055
+
+``` r
+# Create ggplot
+scatterplt <- ggplot(data, aes(x = beta_hat, y = beta_true, color = group)) +
+  geom_point() +
+  geom_abline(intercept = 0, slope = 1, color = "red", linetype = "dashed") +
+  scale_color_manual(values = c("Main effects" = "lightblue", "Interaction effects" = "darkred")) +
+  labs(x = "Mean estimates (10 train-test splits)", y = "True coefficient", title = "", color = "Group") +
+  theme_minimal() + 
+  theme(axis.text.x = element_text(colour = "black", size = 12),
+        axis.ticks.x = element_blank(),
+        axis.text.y = element_text(colour = "black", size = 12),
+        axis.ticks.y = element_line(colour = "black"))
+# ggsave(paste0(path, "sim_suppl_2_scatter.pdf"), scatterplt, height = 3.4, width = 4.5)
+```
+
+### R squared
+
+![](01-simulations-sparsity_files/figure-gfm/unnamed-chunk-41-1.png)<!-- -->
+
+### 2. 40 main effects, 60 interactions
+
+``` r
+## nonzero main effects
+set.seed(123)
+pnz <- 40
+beta_main <-  rnorm(pnz, mean = 0, sd = 20)
+main_part = log(X_Family_rel[, c(1:pnz)]) %*% beta_main
+## One nonzero interaction effect
+interaction_part <- list()
+Y_sim_int <- list()
+set.seed(123)
+noise <-  rnorm(nrow(X_Family_rel))
+int_all <- c(1:60)
+set.seed(123)
+beta_interact = rnorm(length(int_all), mean = 0, sd = 20)
+i=1
+interaction_part[[i]] = X_Family_interact[, 1:length(int_all)] %*% beta_interact
+Y_sim_int[[i]] <- 10 + main_part + interaction_part[[i]] + noise
+Y_sim_int[[i]] <- as.numeric(Y_sim_int[[i]])
+```
+
+``` r
+slc_slc_int3 <- list()
+for(i in 1) {
+  print(paste("Model:", i))
+  slc_slc_int3[[i]] <- slc_slc_int_all_splits(X = as.matrix(X_Family_rel),
+                                                             y = Y_sim_int[[i]],
+                                                             method = "regr", output = "raw",
+                                             nbsplit = 10,
+                                             #nbsplit = 5,
+                                             ii = "i1se")
+}
+```
+
+``` r
+library(ggplot2)
+mod <- slc_slc_int3
+# Prepare data
+## mean over 10 train-test splits
+beta_hat <- rowMeans(mod[[1]]$beta_int_est_refit)
+beta_true <- c(beta_main, rep(0, ncol(X_Family) - pnz), beta_interact, 
+               rep(0, ncol(X_Family_interact) - length(int_all)))
+# Create a group variable
+group <- ifelse(1:length(beta_hat) <= 10, "Main effects", "Interaction effects")
+data <- data.frame(beta_hat = beta_hat, beta_true = beta_true, group = group)
+estim_err <- mod[[1]]$beta_int_est_refit - beta_true
+(mean_abs_estim_err <- mean(colMeans(abs(estim_err))))
+```
+
+    ## [1] 0.4380645
+
+``` r
+mean(colMeans(abs(mod[[1]]$beta_int_est_refit)))
+```
+
+    ## [1] 1.132674
+
+``` r
+# Create ggplot
+scatterplt <- ggplot(data, aes(x = beta_hat, y = beta_true, color = group)) +
+  geom_point() +
+  geom_abline(intercept = 0, slope = 1, color = "red", linetype = "dashed") +
+  scale_color_manual(values = c("Main effects" = "lightblue", "Interaction effects" = "darkred")) +
+  labs(x = "Mean estimates (10 train-test splits)", y = "True coefficient", title = "", color = "Group") +
+  theme_minimal() + 
+  theme(axis.text.x = element_text(colour = "black", size = 12),
+        axis.ticks.x = element_blank(),
+        axis.text.y = element_text(colour = "black", size = 12),
+        axis.ticks.y = element_line(colour = "black"))
+# ggsave(paste0(path, "sim_suppl_3_scatter.pdf"), scatterplt, height = 3.5, width = 4.5)
+```
+
+### R squared
+
+![](01-simulations-sparsity_files/figure-gfm/unnamed-chunk-45-1.png)<!-- -->
 
 ## Files written
 
