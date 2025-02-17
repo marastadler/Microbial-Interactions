@@ -59,7 +59,6 @@ mOTU_genus[1:5, 1:5]
 
 ```{r}
 dim(meta_all)
-
 ```
 
 Read ARG data and add it to meta data
@@ -121,6 +120,7 @@ order_abund <- order(colSums(mOTU_genus.m), decreasing = T)
 X <- mOTU_genus.m[, order_abund[2:33]]
 ## remove duplicates
 X <- X[, !(colnames(X) %in% c("_Ruminococcus_", "_Bacteroides_"))]
+colnames(X)
 ```
 
 As y we choose the number of ARGs
@@ -202,26 +202,16 @@ for (r in seq(nsplit)) {
 
 
 # Arrange the ggplots in a single row
-grid.arrange(grobs = list_plt_slcint[1:3], ncol = 3)
+# grid.arrange(grobs = list_plt_slcint[1:3], ncol = 3)
 ```
 
 ```{r echo = F,eval = F}
 #saveRDS(t(slc_slc_int_ARGs$beta_int_est_refit), "coef_qlc_relative_ARGs.rds")
 ```
 
+
 ```{r echo = F, eval = T}
-# Assuming you have ggplot2 library loaded
-library(ggplot2)
-
-# Assuming slc_slc_int_species is a data frame with the necessary structure
-
-# Extracting and transforming data for ggplot2
-median_values <- apply(slc_slc_int_ARGs$beta_int_est_refit, 1, median)
-non_zero_columns <- t(slc_slc_int_ARGs$beta_int_est_refit)[, which(abs(median_values) > 2)]
-#saveRDS(colnames(non_zero_columns), "selected-features-qlc-compositions.rds")
-
-
-## build superset of all nonzero coefficients in all three models
+# Build superset of all nonzero coefficients in all three models
 s1 <- readRDS("data/selected-features-APL-counts.rds")
 s2 <- readRDS("data/selected-features-APL-binary.rds")
 s3 <- readRDS("data/selected-features-qlc-compositions.rds")
@@ -229,35 +219,39 @@ sel12 <- union(s1, s2)
 sel123 <- union(sel12, s3)
 non_zero_columns <- t(slc_slc_int_ARGs$beta_int_est_refit)[, sel123]
 
+# Identify columns with and without ":"
 selected_columns <- grep(":", colnames(non_zero_columns), value = TRUE)
-# Select int. columns from the matrix and multiply them by 100
+# Apply scaling factor to interaction columns
 non_zero_columns[, selected_columns] <- non_zero_columns[, selected_columns] * 20
 
-
+# Melt the data for ggplot
 data_long <- reshape2::melt(as.data.frame(non_zero_columns))
-order_by_nchar <- order(nchar(sel123), decreasing = F)
 order_by_median <- readRDS("data/universal_order_boxplots.rds")
-data_long$variable <- factor(data_long$variable, levels  = rev(order_by_median))
-library(RColorBrewer)
-nb.cols <- length(sel123)
-mycolors <- colorRampPalette(rev(brewer.pal(8, "Blues")))(nb.cols)
-mycolors <- c(rep("steelblue", length(order_by_median)-10), rep("lightblue3", 10))
+data_long$variable <- factor(data_long$variable, levels = rev(order_by_median))
 
-plt_coef <- ggplot(data_long, aes(x = value, y = variable, fill = variable)) +  # Transposed x and y aesthetics
+# Assign colors based on the presence of ":"
+# Prepare color assignment dynamically
+data_long$color <- ifelse(grepl(":", data_long$variable), "darkred", "lightblue")
+
+# Plotting
+plt_coef <- ggplot(data_long, aes(x = value, y = variable, fill = color)) +
   geom_boxplot() +
-  labs(xlab = "Estimated coefficients 10 splits",  # Swapped xlab and ylab
-       ylab = "Features", 
-       title = "Boxplot of Estimated Coefficients (10 splits)") +
+  labs(x = "Estimated coefficients 10 splits", y = "Features", title = "Boxplot of Estimated Coefficients (10 splits)") +
   theme_minimal() +
-  theme(axis.text.y = element_text(angle = 0, vjust = 0.5, hjust = 1, size = 12, color = "black"), axis.text.x = element_text(size = 12, color = "black"),
-        legend.position="none") +
-    scale_fill_manual(values=mycolors)
+  theme(axis.text.y = element_text(angle = 0, vjust = 0.5, hjust = 1, size = 12, color = "black"),
+        axis.text.x = element_text(size = 12, color = "black"),
+        legend.position = "none") +
+  scale_fill_manual(values = c("lightblue" = "lightblue", "darkred" = "darkred"))  # Ensure colors are specified here
+
+# Optionally save or display the plot
+# ggsave(paste0(path.temp, "boxplot-coef-MetaCardis-ARGs-qlc-comp.pdf"), plt_coef, height = 10, width = 7)
 ```
+
+
 
 ```{r, echo=F, fig.width=15, fig.height=20}
 plt_coef
 ```
-
 
 
 

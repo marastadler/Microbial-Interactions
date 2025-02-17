@@ -1,6 +1,6 @@
 04c-ARGs-interactions-relative
 ================
-Compiled at 2024-04-27 14:10:41 UTC
+Compiled at 2025-02-17 08:31:09 UTC
 
 Here we treat the counts as relative abundances.
 
@@ -137,7 +137,19 @@ order_abund <- order(colSums(mOTU_genus.m), decreasing = T)
 X <- mOTU_genus.m[, order_abund[2:33]]
 ## remove duplicates
 X <- X[, !(colnames(X) %in% c("_Ruminococcus_", "_Bacteroides_"))]
+colnames(X)
 ```
+
+    ##  [1] "Bacteroides"           "Prevotella"            "Faecalibacterium"     
+    ##  [4] "Eubacterium"           "Alistipes"             "Parabacteroides"      
+    ##  [7] "Ruminococcus"          "Roseburia"             "Dialister"            
+    ## [10] "Akkermansia"           "Escherichia"           "Phascolarctobacterium"
+    ## [13] "Bifidobacterium"       "Acidaminococcus"       "Odoribacter"          
+    ## [16] "Clostridium"           "Sutterella"            "Butyrivibrio"         
+    ## [19] "Coprococcus"           "Dorea"                 "Bilophila"            
+    ## [22] "Mitsuokella"           "Capnocytophaga"        "Collinsella"          
+    ## [25] "Parasutterella"        "Streptococcus"         "Megasphaera"          
+    ## [28] "Desulfovibrio"         "Veillonella"           "Fusobacterium"
 
 As y we choose the number of ARGs
 
@@ -213,10 +225,8 @@ for (r in seq(nsplit)) {
 
 
 # Arrange the ggplots in a single row
-grid.arrange(grobs = list_plt_slcint[1:3], ncol = 3)
+# grid.arrange(grobs = list_plt_slcint[1:3], ncol = 3)
 ```
-
-![](04c-ARGs-interactions-relative_files/figure-gfm/unnamed-chunk-17-1.png)<!-- -->
 
 ![](04c-ARGs-interactions-relative_files/figure-gfm/unnamed-chunk-20-1.png)<!-- -->
 
