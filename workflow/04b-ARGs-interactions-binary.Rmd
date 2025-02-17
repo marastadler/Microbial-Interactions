@@ -163,7 +163,7 @@ for(r in seq(nsplit)){
   tr[[r]] <- sample(ntot, n)
   
   fit.glmnet[[r]] <- glmnet(Xall[tr[[r]], ], y[tr[[r]]])
-  #set.seed(r)
+  # set.seed(r)
   cvfit.glmnet[[r]] <- cv.glmnet(Xall[tr[[r]], ], y[tr[[r]]], nfolds = 5)
   yhat_tr.glmnet[[r]] <- predict(cvfit.glmnet[[r]], newx = Xall[tr[[r]], ], s = "lambda.min")
   yhat_te.glmnet[[r]] <- predict(cvfit.glmnet[[r]], newx = Xall[-tr[[r]], ], s = "lambda.min")
@@ -182,20 +182,17 @@ for(r in seq(nsplit)){
 
 rownames(coef_mat_allsplits.glmnet) <- colnames(Xall)
 coef_mat_allsplits.glmnet <- t(coef_mat_allsplits.glmnet)
-#saveRDS(coef_mat_allsplits.glmnet, "coef_APL_binary_ARGs.rds")
+# saveRDS(coef_mat_allsplits.glmnet, "coef_APL_binary_ARGs.rds")
 ```
 
-
 ```{r eval = T, echo = F}
+library(ggplot2)
+library(reshape2)
 
-
+# Assuming 'coef_mat_allsplits.glmnet' is already loaded and processed as described
 feature_median <- apply(coef_mat_allsplits.glmnet, 2, median)
-# Filter columns with non-zero median for plotting
 selected_columns <- coef_mat_allsplits.glmnet[, abs(feature_median) != 0]
-# saveRDS(colnames(selected_columns), "selected-features-APL-binary.rds")
 
-
-# ## build superset of all nonzero coefficients in all three models
 s1 <- readRDS("data/selected-features-APL-counts.rds")
 s2 <- readRDS("data/selected-features-APL-binary.rds")
 s3 <- readRDS("data/selected-features-qlc-compositions.rds")
@@ -203,36 +200,30 @@ sel12 <- union(s1, s2)
 sel123 <- union(sel12, s3)
 non_zero_columns <- coef_mat_allsplits.glmnet[, sel123]
 
-
-# Get column names without ":"
-selected_columns_main <- colnames(non_zero_columns)[!grepl(":", colnames(non_zero_columns))]
-
-
-selected_columns_int <- grep(":", colnames(non_zero_columns), value = TRUE)
-
-data_long <- reshape2::melt(as.data.frame(non_zero_columns))
-main_ord <- abs(apply(non_zero_columns, 2, median))[selected_columns_main]
-ind_ord <- abs(apply(non_zero_columns, 2, median))[selected_columns_int]
-order_by_median <- c(names(sort(main_ord, decreasing = T)),
-                     names(sort(ind_ord, decreasing = T)))
-
+# Get the order from the provided RDS file
 order_by_median <- readRDS("data/universal_order_boxplots.rds")
-data_long$variable <- factor(data_long$variable, levels  = rev(order_by_median))
 
-nb.cols <- length(sel123)
-mycolors <- colorRampPalette(rev(brewer.pal(8, "Blues")))(nb.cols)
-mycolors <- c(rep("steelblue", length(order_by_median)-10), rep("lightblue3", 10))
+# Prepare data for plotting
+data_long <- melt(as.data.frame(non_zero_columns))
+data_long$variable <- factor(data_long$variable, levels = rev(order_by_median))
 
-plt_coef <- ggplot(data_long, aes(x = value, y = variable, fill = variable)) +  # Transposed x and y aesthetics
+# Assign colors based on the presence of ":"
+data_long$color <- ifelse(grepl(":", data_long$variable), "darkred", "lightblue")
+
+# Plotting
+plt_coef <- ggplot(data_long, aes(x = value, y = variable, fill = color)) +
   geom_boxplot() +
-  labs(xlab = "Estimated coefficients 10 splits",  # Swapped xlab and ylab
-       ylab = "Features", 
-       title = "Boxplot of Estimated Coefficients (10 splits)") +
+  labs(x = "Estimated coefficients 10 splits", y = "Features", title = "Boxplot of Estimated Coefficients (10 splits)") +
   theme_minimal() +
-  theme(axis.text.y = element_text(angle = 0, vjust = 0.5, hjust = 1, size = 12, color = "black"), axis.text.x = element_text(size = 12, color = "black"),
-        legend.position="none") +
-    scale_fill_manual(values=mycolors) + xlim(c(-2000, 2000))
+  theme(axis.text.y = element_text(angle = 0, vjust = 0.5, hjust = 1, size = 12, color = "black"),
+        axis.text.x = element_text(size = 12, color = "black"),
+        legend.position = "none") +
+  scale_fill_manual(values = c("lightblue" = "lightblue", "darkred" = "darkred")) +
+  xlim(c(-2000, 2000))
+
+# ggsave(paste0(path.temp, "boxplot-coef-MetaCardis-ARGs-qlc-bin.pdf"), plt_coef, height = 10, width = 7)
 ```
+
 
 ```{r, echo=F, fig.width=15, fig.height=20}
 plt_coef
@@ -257,7 +248,7 @@ for (r in seq(nsplit)) {
 }
 
 # Arrange the ggplots in a single row
-grid.arrange(grobs = list_plt_glmnet[1:2], ncol = 2)
+# grid.arrange(grobs = list_plt_glmnet[1:2], ncol = 2)
 ```
 
 ```{r}
@@ -284,7 +275,7 @@ for (r in seq(nsplit)) {
 
 
 # Arrange the ggplots in a single row
-grid.arrange(grobs = list_plt_glmnet[1:2], ncol = 2)
+# grid.arrange(grobs = list_plt_glmnet[1:2], ncol = 2)
 ```
 
 

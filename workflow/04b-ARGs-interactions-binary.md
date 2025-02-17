@@ -1,6 +1,6 @@
 04b-ARGs-interactions-binary
 ================
-Compiled at 2024-04-27 13:41:30 UTC
+Compiled at 2025-02-17 08:14:57 UTC
 
 Here we only use the binarized presence-absence information of the
 mOTUs.
@@ -188,7 +188,7 @@ for(r in seq(nsplit)){
   tr[[r]] <- sample(ntot, n)
   
   fit.glmnet[[r]] <- glmnet(Xall[tr[[r]], ], y[tr[[r]]])
-  #set.seed(r)
+  # set.seed(r)
   cvfit.glmnet[[r]] <- cv.glmnet(Xall[tr[[r]], ], y[tr[[r]]], nfolds = 5)
   yhat_tr.glmnet[[r]] <- predict(cvfit.glmnet[[r]], newx = Xall[tr[[r]], ], s = "lambda.min")
   yhat_te.glmnet[[r]] <- predict(cvfit.glmnet[[r]], newx = Xall[-tr[[r]], ], s = "lambda.min")
@@ -207,7 +207,7 @@ for(r in seq(nsplit)){
 
 rownames(coef_mat_allsplits.glmnet) <- colnames(Xall)
 coef_mat_allsplits.glmnet <- t(coef_mat_allsplits.glmnet)
-#saveRDS(coef_mat_allsplits.glmnet, "coef_APL_binary_ARGs.rds")
+# saveRDS(coef_mat_allsplits.glmnet, "coef_APL_binary_ARGs.rds")
 ```
 
 ![](04b-ARGs-interactions-binary_files/figure-gfm/unnamed-chunk-16-1.png)<!-- -->
@@ -230,10 +230,8 @@ for (r in seq(nsplit)) {
 }
 
 # Arrange the ggplots in a single row
-grid.arrange(grobs = list_plt_glmnet[1:2], ncol = 2)
+# grid.arrange(grobs = list_plt_glmnet[1:2], ncol = 2)
 ```
-
-![](04b-ARGs-interactions-binary_files/figure-gfm/unnamed-chunk-17-1.png)<!-- -->
 
 ``` r
 Rsq <- c()
@@ -260,10 +258,8 @@ for (r in seq(nsplit)) {
 
 
 # Arrange the ggplots in a single row
-grid.arrange(grobs = list_plt_glmnet[1:2], ncol = 2)
+# grid.arrange(grobs = list_plt_glmnet[1:2], ncol = 2)
 ```
-
-![](04b-ARGs-interactions-binary_files/figure-gfm/unnamed-chunk-19-1.png)<!-- -->
 
 ## Files written
 
