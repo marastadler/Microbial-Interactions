@@ -12,10 +12,9 @@ knitr::opts_chunk$set(dpi = 200, echo = T, warning = F, message = F)
 
 ```
 
-The data was imported from the data resources in: https://www.nature.com/articles/s41586-021-04177-9#data-availability 
+The data was imported from the data resources in: <https://www.nature.com/articles/s41586-021-04177-9#data-availability>
 
-
-```{r packages} 
+```{r packages}
 library("conflicted")
 library(dplyr)
 library(tidyr)
@@ -44,8 +43,9 @@ path_source <- projthis::proj_path_source(params$name)
 path_data <- "data/"
 mOTU_all <- readRDS(paste0(path_data, "mOTU_all.rds"))
 meta_all <- readRDS(paste0(path_data, "Metadata_all.rds"))
-```
 
+str(mOTU_all)
+```
 
 ```{r}
 ## extract genus level and adjust names
@@ -55,9 +55,7 @@ rownames(mOTU_genus) <- substr(rownames(mOTU_genus), 4, nchar(rownames(mOTU_genu
 mOTU_genus[1:5, 1:5]
 ```
 
-
-1. Remove samples with missing data in the metadata
-
+1.  Remove samples with missing data in the metadata
 
 ```{r}
 dim(meta_all)
@@ -78,16 +76,14 @@ head(arg_df)
 meta_arg <- meta_all %>% 
   tibble::rownames_to_column("SampleID") %>% 
   left_join(arg_df, by="SampleID") %>% 
-  column_to_rownames("SampleID")
+  tibble::column_to_rownames("SampleID")
 meta_all <- meta_arg
 ```
-
 
 ```{r}
 meta_all.f = meta_all[complete.cases(meta_all),]
 dim(meta_all.f)
 ```
-
 
 ```{r}
 ind_genus = intersect(rownames(meta_all.f), rownames(mOTU_genus))
@@ -104,9 +100,7 @@ dim(meta_all.f.m)
 dim(mOTU_genus.m)
 ```
 
-
-2. Remove covariates with only zeros
-
+2.  Remove covariates with only zeros
 
 ```{r}
 sum(colSums(meta_all.f.m!= 0) == 0)
@@ -129,17 +123,13 @@ ggplot(meta_all_f_m_df, aes(x = card10m_column)) +
   theme_minimal()
 ```
 
-
 ### scale filtered & merged meta data:
 
 ```{r}
 meta_all.f.m.sc <- scale(meta_all.f.m)
 ```
 
-
-
-
-Let's take into account the 30 most abundant genera, remove "unclassified":
+Let's take into account the 30 most prevalent genera, remove "unclassified":
 
 ```{r}
 order_abund <- order(colSums(mOTU_genus.m), decreasing = T)
@@ -157,12 +147,83 @@ names(y) <- rownames(meta_all.f.m)
 all(names(y) == rownames(X))
 ```
 
-
-
-
-
 ```{r}
 rsq <- function (x, y) cor(x, y) ^ 2
+```
+
+## Linear Lasso model
+
+```{r}
+fit.glmnet.lin <- list()
+cvfit.glmnet.lin <- list()
+yhat_tr.glmnet.lin <- list()
+yhat_te.glmnet.lin <- list()
+Xall.lin <- X
+
+tr <- list()
+ntot <- length(y)
+p <- ncol(X)
+n <- round(2/3 * ntot)
+nsplit = 10
+
+set.seed(123)
+Xm <- X + 0.00001 * matrix(rnorm(length(X)), nrow = nrow(X), ncol = ncol(X))
+for(r in seq(nsplit)){
+  set.seed(r)
+  tr[[r]] <- sample(ntot, n)
+  xtr <- Xm[tr[[r]], ]
+  xte <- Xm[-tr[[r]], ] 
+  ## standardize X:
+  xtr <- scale(xtr, TRUE, TRUE)
+  ## standardize the testset X in the same way that it was in training:
+  xte <- scale(xte, center = attr(xtr, "scaled:center"), 
+               scale = attr(xtr, "scaled:scale"))
+  
+
+  Xalltr.lin <- xtr
+  Xallte.lin <- xte
+  
+  fit.glmnet.lin[[r]] <- glmnet(Xalltr.lin, y[tr[[r]]], standardize = F)
+  cvfit.glmnet.lin[[r]] <- cv.glmnet(Xalltr.lin, y[tr[[r]]], nfolds = 5, standardize = F)
+  yhat_tr.glmnet.lin[[r]] <- predict(cvfit.glmnet.lin[[r]], newx = Xalltr.lin, 
+                                 s = "lambda.min", standardize = F)
+  yhat_te.glmnet.lin[[r]] <- predict(cvfit.glmnet.lin[[r]], newx = Xallte.lin, 
+                                 s = "lambda.min", standardize = F)
+}
+```
+
+```{r}
+Rsq.lin <- c()
+for(r in seq(nsplit)){
+  Rsq.lin[r] <- rsq(y[-tr[[r]]], as.vector(yhat_te.glmnet.lin[[r]]))
+}
+mean(Rsq.lin)
+```
+
+```{r}
+list_plt_glmnet <- list()
+list_plt_glmnet.lin <- list()
+
+for (r in seq(nsplit)) {
+  data <- data.frame(Observed = y[-tr[[r]]], Predicted = as.vector(yhat_te.glmnet.lin[[r]]))
+  
+  list_plt_glmnet.lin[[r]] <- ggplot(data, aes(y = Observed, x = Predicted)) +
+    geom_point(alpha = 0.7, size = 2) +  # Set alpha for transparency
+    geom_abline(intercept = 0, slope = 1, color = "grey", linetype = "dashed") +
+    labs(title = paste0("Quadratic Lasso (APL): train-test split ", r),
+         x = "Predicted number of ARGs (test set)", y = "Observed number of ARGs (test set)") +
+    theme_minimal() + xlim(range(c(data$Observed, data$Predicted)))+ 
+    theme(axis.text = element_text(color = "black", size = 12), 
+          axis.title.y = element_text(color = "black", size = 12),                                            
+          axis.title.x = element_text(color = "black", size = 12)
+          )
+}
+
+# Arrange the ggplots in a single row
+# grid.arrange(grobs = list_plt_glmnet[1:2], ncol = 2)
+# plt.save <- list_plt_glmnet.lin[[9]] + xlim(90000, 150000)
+
+# ggsave(paste0(path, "scatterplt_ARG_lin.png"), plt.save, height = 3.5, width = 4)
 ```
 
 ## All pairs-lasso
@@ -185,8 +246,8 @@ Xm <- X + 0.00001 * matrix(rnorm(length(X)), nrow = nrow(X), ncol = ncol(X))
 for(r in seq(nsplit)){
   set.seed(r)
   tr[[r]] <- sample(ntot, n)
-  xtr <- Xm[tr[[r]], ]
-  xte <- Xm[-tr[[r]], ]
+  xtr <- Xm[tr[[r]], ] 
+  xte <- Xm[-tr[[r]], ] 
   ## standardize X:
   xtr <- scale(xtr, TRUE, TRUE)
   ## standardize the testset X in the same way that it was in training:
@@ -236,7 +297,7 @@ non_zero_columns <- coef_mat_allsplits.glmnet[, abs(feature_median) > 100]
 data_long <- reshape2::melt(as.data.frame(non_zero_columns))
 
 
-mycolors <- c(rep("lightblue3", 9), rep("steelblue", 14))
+mycolors <- c(rep("lightblue", 9), rep("darkred", 14))
 
 plt_coef <- ggplot(data_long, aes(y= value, x = variable, fill = variable)) +  # Transposed x and y aesthetics
   geom_boxplot() +
@@ -250,9 +311,8 @@ plt_coef <- ggplot(data_long, aes(y= value, x = variable, fill = variable)) +  #
         axis.title.y = element_blank(),
         legend.position="none") +
     scale_fill_manual(values=mycolors)
+# ggsave(paste0(path, "plot_coef_fig2.pdf"), plt_coef, width = 6, height = 4.5)
 ```
-
-
 
 boxplot of coefficients over 10 train-test splits for figure 5
 
@@ -266,7 +326,7 @@ for(r in seq(nsplit)){
 
 rownames(coef_mat_allsplits.glmnet) <- colnames(Xall)
 coef_mat_allsplits.glmnet <- t(coef_mat_allsplits.glmnet)
-#saveRDS(coef_mat_allsplits.glmnet, "coef_APL_counts_ARGs.rds")
+# saveRDS(coef_mat_allsplits.glmnet, "coef_APL_counts_ARGs.rds")
 ```
 
 ```{r eval = T, echo = F}
@@ -274,8 +334,8 @@ coef_mat_allsplits.glmnet <- t(coef_mat_allsplits.glmnet)
 feature_median <- apply(coef_mat_allsplits.glmnet, 2, median)
 
 # Filter columns with non-zero median for plotting
-selected_columns <- coef_mat_allsplits.glmnet[, abs(feature_median) > 50]
-#saveRDS(colnames(selected_columns), "selected-features-APL-counts.rds")
+# selected_columns <- coef_mat_allsplits.glmnet[, abs(feature_median) > 50]
+# saveRDS(colnames(selected_columns), "selected-features-APL-counts.rds")
 
 
 ## build superset of all nonzero coefficients in all three models
@@ -306,7 +366,7 @@ data_long$variable <- factor(data_long$variable, levels  = rev(order_by_median))
 
 nb.cols <- length(sel123)
 mycolors <- rep(colorRampPalette(brewer.pal(12, "Set3"))(12), 5)
-mycolors <- c(rep("steelblue", length(ind_ord)), rep("lightblue3", length(main_ord)))
+mycolors <- c(rep("darkred", length(ind_ord)), rep("lightblue", length(main_ord)))
 
 plt_coef <- ggplot(data_long, aes(x = value, y = variable, fill = variable)) +  # Transposed x and y aesthetics
   geom_boxplot() +
@@ -319,14 +379,13 @@ plt_coef <- ggplot(data_long, aes(x = value, y = variable, fill = variable)) +  
           element_text(size = 12, color = "black"),
         legend.position="none") +
     scale_fill_manual(values=mycolors)
+# ggsave(paste0(path.temp, "boxplot-coef-MetaCardis-ARGs-qlc-abs.pdf"), plt_coef, height = 10, width = 7)
 ```
 
 ```{r, echo=F, fig.width=15, fig.height=20}
 
 plt_coef
 ```
-
-
 
 ```{r}
 list_plt_glmnet <- list()
@@ -348,22 +407,15 @@ for (r in seq(nsplit)) {
 }
 
 # Arrange the ggplots in a single row
-grid.arrange(grobs = list_plt_glmnet[1:2], ncol = 2)
+# grid.arrange(grobs = list_plt_glmnet[1:2], ncol = 2)
+# plt.apl.save <- list_plt_glmnet[[9]] + xlim(90000, 150000) 
+# ggsave(paste0(path, "scatterplt_ARG_apl.png"), plt.apl.save, height = 3.5, width = 4)
 ```
-
-```{r}
-Rsq <- c()
-for(r in seq(nsplit)){
-  Rsq[r] <- rsq(y[-tr[[r]]], as.vector(yhat_te.glmnet[[r]]))
-}
-mean(Rsq)
-```
-
 
 
 ## Files written
 
-These files have been written to the target directory, ```r paste0("data/", params$name)```:
+These files have been written to the target directory, `r paste0("data/", params$name)`:
 
 ```{r list-files-target}
 projthis::proj_dir_info(path_target())

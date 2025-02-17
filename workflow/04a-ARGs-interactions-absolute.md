@@ -1,6 +1,6 @@
 04a-ARGs-interactions-absolute
 ================
-Compiled at 2024-04-27 13:28:38 UTC
+Compiled at 2025-02-17 07:58:52 UTC
 
 The data was imported from the data resources in:
 <https://www.nature.com/articles/s41586-021-04177-9#data-availability>
@@ -23,7 +23,39 @@ library(RColorBrewer)
 path_data <- "data/"
 mOTU_all <- readRDS(paste0(path_data, "mOTU_all.rds"))
 meta_all <- readRDS(paste0(path_data, "Metadata_all.rds"))
+
+str(mOTU_all)
 ```
+
+    ## List of 7
+    ##  $ Domain : num [1:1818, 1:3] 25268379 0 0 0 0 ...
+    ##   ..- attr(*, "dimnames")=List of 2
+    ##   .. ..$ : chr [1:1818] "M0_x10MCx1134" "M0_x10MCx1135" "M0_x10MCx1138" "M0_x10MCx1140" ...
+    ##   .. ..$ : chr [1:3] "Archaea" "Bacteria" "unclassified"
+    ##  $ Phylum : num [1:1818, 1:33] 0 0 0 0 0 0 0 0 0 0 ...
+    ##   ..- attr(*, "dimnames")=List of 2
+    ##   .. ..$ : chr [1:1818] "M0_x10MCx1134" "M0_x10MCx1135" "M0_x10MCx1138" "M0_x10MCx1140" ...
+    ##   .. ..$ : chr [1:33] "Acidobacteria" "Actinobacteria" "Aquificae" "Bacteroidetes" ...
+    ##  $ Class  : num [1:1818, 1:54] 0 0 0 0 0 0 0 0 0 0 ...
+    ##   ..- attr(*, "dimnames")=List of 2
+    ##   .. ..$ : chr [1:1818] "M0_x10MCx1134" "M0_x10MCx1135" "M0_x10MCx1138" "M0_x10MCx1140" ...
+    ##   .. ..$ : chr [1:54] "Acidobacteria" "Actinobacteria__class_" "Alphaproteobacteria" "Anaerolineae" ...
+    ##  $ Order  : num [1:1818, 1:114] 0 0 0 0 0 0 0 0 0 0 ...
+    ##   ..- attr(*, "dimnames")=List of 2
+    ##   .. ..$ : chr [1:1818] "M0_x10MCx1134" "M0_x10MCx1135" "M0_x10MCx1138" "M0_x10MCx1140" ...
+    ##   .. ..$ : chr [1:114] "Acholeplasmatales" "Acidilobales" "Acidimicrobiales" "Acidithiobacillales" ...
+    ##  $ Family : num [1:1818, 1:246] 0 0 0 0 0 0 0 0 0 0 ...
+    ##   ..- attr(*, "dimnames")=List of 2
+    ##   .. ..$ : chr [1:1818] "M0_x10MCx1134" "M0_x10MCx1135" "M0_x10MCx1138" "M0_x10MCx1140" ...
+    ##   .. ..$ : chr [1:246] "Acetobacteraceae" "Acholeplasmataceae" "Acidaminococcaceae" "Acidilobaceae" ...
+    ##  $ Genus  : num [1:1818, 1:710] 0 0 0 0 0 0 0 0 0 0 ...
+    ##   ..- attr(*, "dimnames")=List of 2
+    ##   .. ..$ : chr [1:1818] "M0_x10MCx1134" "M0_x10MCx1135" "M0_x10MCx1138" "M0_x10MCx1140" ...
+    ##   .. ..$ : chr [1:710] "_Bacteroides_" "_Cellvibrio_" "_Clostridium_" "_Eubacterium_" ...
+    ##  $ Species: num [1:1818, 1:1938] 0 0 0 0 0 0 0 0 0 0 ...
+    ##   ..- attr(*, "dimnames")=List of 2
+    ##   .. ..$ : chr [1:1818] "M0_x10MCx1134" "M0_x10MCx1135" "M0_x10MCx1138" "M0_x10MCx1140" ...
+    ##   .. ..$ : chr [1:1938] "_Bacteroides__pectinophilus" "_Cellvibrio__gilvus" "_Clostridium__bartlettii" "_Clostridium__difficile" ...
 
 ``` r
 ## extract genus level and adjust names
@@ -79,7 +111,7 @@ head(arg_df)
 meta_arg <- meta_all %>% 
   tibble::rownames_to_column("SampleID") %>% 
   left_join(arg_df, by="SampleID") %>% 
-  column_to_rownames("SampleID")
+  tibble::column_to_rownames("SampleID")
 meta_all <- meta_arg
 ```
 
@@ -155,7 +187,7 @@ ggplot(meta_all_f_m_df, aes(x = card10m_column)) +
 meta_all.f.m.sc <- scale(meta_all.f.m)
 ```
 
-Let’s take into account the 30 most abundant genera, remove
+Let’s take into account the 30 most prevalent genera, remove
 “unclassified”:
 
 ``` r
@@ -180,6 +212,83 @@ all(names(y) == rownames(X))
 rsq <- function (x, y) cor(x, y) ^ 2
 ```
 
+## Linear Lasso model
+
+``` r
+fit.glmnet.lin <- list()
+cvfit.glmnet.lin <- list()
+yhat_tr.glmnet.lin <- list()
+yhat_te.glmnet.lin <- list()
+Xall.lin <- X
+
+tr <- list()
+ntot <- length(y)
+p <- ncol(X)
+n <- round(2/3 * ntot)
+nsplit = 10
+
+set.seed(123)
+Xm <- X + 0.00001 * matrix(rnorm(length(X)), nrow = nrow(X), ncol = ncol(X))
+for(r in seq(nsplit)){
+  set.seed(r)
+  tr[[r]] <- sample(ntot, n)
+  xtr <- Xm[tr[[r]], ]
+  xte <- Xm[-tr[[r]], ] 
+  ## standardize X:
+  xtr <- scale(xtr, TRUE, TRUE)
+  ## standardize the testset X in the same way that it was in training:
+  xte <- scale(xte, center = attr(xtr, "scaled:center"), 
+               scale = attr(xtr, "scaled:scale"))
+  
+
+  Xalltr.lin <- xtr
+  Xallte.lin <- xte
+  
+  fit.glmnet.lin[[r]] <- glmnet(Xalltr.lin, y[tr[[r]]], standardize = F)
+  cvfit.glmnet.lin[[r]] <- cv.glmnet(Xalltr.lin, y[tr[[r]]], nfolds = 5, standardize = F)
+  yhat_tr.glmnet.lin[[r]] <- predict(cvfit.glmnet.lin[[r]], newx = Xalltr.lin, 
+                                 s = "lambda.min", standardize = F)
+  yhat_te.glmnet.lin[[r]] <- predict(cvfit.glmnet.lin[[r]], newx = Xallte.lin, 
+                                 s = "lambda.min", standardize = F)
+}
+```
+
+``` r
+Rsq.lin <- c()
+for(r in seq(nsplit)){
+  Rsq.lin[r] <- rsq(y[-tr[[r]]], as.vector(yhat_te.glmnet.lin[[r]]))
+}
+mean(Rsq.lin)
+```
+
+    ## [1] 0.4887972
+
+``` r
+list_plt_glmnet <- list()
+list_plt_glmnet.lin <- list()
+
+for (r in seq(nsplit)) {
+  data <- data.frame(Observed = y[-tr[[r]]], Predicted = as.vector(yhat_te.glmnet.lin[[r]]))
+  
+  list_plt_glmnet.lin[[r]] <- ggplot(data, aes(y = Observed, x = Predicted)) +
+    geom_point(alpha = 0.7, size = 2) +  # Set alpha for transparency
+    geom_abline(intercept = 0, slope = 1, color = "grey", linetype = "dashed") +
+    labs(title = paste0("Quadratic Lasso (APL): train-test split ", r),
+         x = "Predicted number of ARGs (test set)", y = "Observed number of ARGs (test set)") +
+    theme_minimal() + xlim(range(c(data$Observed, data$Predicted)))+ 
+    theme(axis.text = element_text(color = "black", size = 12), 
+          axis.title.y = element_text(color = "black", size = 12),                                            
+          axis.title.x = element_text(color = "black", size = 12)
+          )
+}
+
+# Arrange the ggplots in a single row
+# grid.arrange(grobs = list_plt_glmnet[1:2], ncol = 2)
+# plt.save <- list_plt_glmnet.lin[[9]] + xlim(90000, 150000)
+
+# ggsave(paste0(path, "scatterplt_ARG_lin.png"), plt.save, height = 3.5, width = 4)
+```
+
 ## All pairs-lasso
 
 ``` r
@@ -200,8 +309,8 @@ Xm <- X + 0.00001 * matrix(rnorm(length(X)), nrow = nrow(X), ncol = ncol(X))
 for(r in seq(nsplit)){
   set.seed(r)
   tr[[r]] <- sample(ntot, n)
-  xtr <- Xm[tr[[r]], ]
-  xte <- Xm[-tr[[r]], ]
+  xtr <- Xm[tr[[r]], ] 
+  xte <- Xm[-tr[[r]], ] 
   ## standardize X:
   xtr <- scale(xtr, TRUE, TRUE)
   ## standardize the testset X in the same way that it was in training:
@@ -251,7 +360,7 @@ non_zero_columns <- coef_mat_allsplits.glmnet[, abs(feature_median) > 100]
 data_long <- reshape2::melt(as.data.frame(non_zero_columns))
 
 
-mycolors <- c(rep("lightblue3", 9), rep("steelblue", 14))
+mycolors <- c(rep("lightblue", 9), rep("darkred", 14))
 
 plt_coef <- ggplot(data_long, aes(y= value, x = variable, fill = variable)) +  # Transposed x and y aesthetics
   geom_boxplot() +
@@ -265,6 +374,7 @@ plt_coef <- ggplot(data_long, aes(y= value, x = variable, fill = variable)) +  #
         axis.title.y = element_blank(),
         legend.position="none") +
     scale_fill_manual(values=mycolors)
+# ggsave(paste0(path, "plot_coef_fig2.pdf"), plt_coef, width = 6, height = 4.5)
 ```
 
 boxplot of coefficients over 10 train-test splits for figure 5
@@ -279,10 +389,10 @@ for(r in seq(nsplit)){
 
 rownames(coef_mat_allsplits.glmnet) <- colnames(Xall)
 coef_mat_allsplits.glmnet <- t(coef_mat_allsplits.glmnet)
-#saveRDS(coef_mat_allsplits.glmnet, "coef_APL_counts_ARGs.rds")
+# saveRDS(coef_mat_allsplits.glmnet, "coef_APL_counts_ARGs.rds")
 ```
 
-![](04a-ARGs-interactions-absolute_files/figure-gfm/unnamed-chunk-19-1.png)<!-- -->
+![](04a-ARGs-interactions-absolute_files/figure-gfm/unnamed-chunk-22-1.png)<!-- -->
 
 ``` r
 list_plt_glmnet <- list()
@@ -304,25 +414,15 @@ for (r in seq(nsplit)) {
 }
 
 # Arrange the ggplots in a single row
-grid.arrange(grobs = list_plt_glmnet[1:2], ncol = 2)
+# grid.arrange(grobs = list_plt_glmnet[1:2], ncol = 2)
+# plt.apl.save <- list_plt_glmnet[[9]] + xlim(90000, 150000) 
+# ggsave(paste0(path, "scatterplt_ARG_apl.png"), plt.apl.save, height = 3.5, width = 4)
 ```
-
-![](04a-ARGs-interactions-absolute_files/figure-gfm/unnamed-chunk-20-1.png)<!-- -->
-
-``` r
-Rsq <- c()
-for(r in seq(nsplit)){
-  Rsq[r] <- rsq(y[-tr[[r]]], as.vector(yhat_te.glmnet[[r]]))
-}
-mean(Rsq)
-```
-
-    ## [1] 0.5240501
 
 ## Files written
 
 These files have been written to the target directory,
-`data/04a-ARGs-interactions-absolute`:
+data/04a-ARGs-interactions-absolute:
 
 ``` r
 projthis::proj_dir_info(path_target())
