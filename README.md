@@ -7,6 +7,7 @@ It contains code for quadratic interaction modeling across different microbial d
 - Quantitative microbiome data (absolute counts)
 - Presence-absence data
 - Relative abundance data (compositional data)
+  
 Our framework unifies statistical approaches for microbial interactions, offering variable selection, hierarchical constraints, and stability-based model selection to ensure robust and interpretable models.
 
 We demonstrate its versatility with applications to:
